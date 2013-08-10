@@ -59,12 +59,43 @@ static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,
   if( res!=DW_DLV_OK ) return( res );
 
   Dwarf_Off range_off;
-  res = dwarf_formudata( range_attr,&range_off,NULL );
+  res = dwarf_global_formref( range_attr,&range_off,NULL );
 
   if( res==DW_DLV_OK )
     res = dwarf_get_ranges_a( dbg,range_off,die,ranges,rangeCount,NULL,NULL );
 
   dwarf_dealloc( dbg,range_attr,DW_DLA_ATTR );
+
+  return( res );
+}
+
+// get low_pc and high_pc of specified DIE
+static int dwarf_lowhighpc( Dwarf_Debug dbg,Dwarf_Die die,
+    Dwarf_Addr *low,Dwarf_Addr *high )
+{
+  int res = dwarf_lowpc( die,low,NULL );
+  if( res!=DW_DLV_OK ) return( res );
+
+  Dwarf_Attribute high_attr;
+  res = dwarf_attr( die,DW_AT_high_pc,&high_attr,NULL );
+  if( res!=DW_DLV_OK ) return( res );
+
+  Dwarf_Half form;
+  res = dwarf_whatform( high_attr,&form,NULL );
+  if( res==DW_DLV_OK )
+  {
+    if( form==DW_FORM_addr )
+      res = dwarf_highpc( die,high,NULL );
+    else
+    {
+      Dwarf_Unsigned offset;
+      res = dwarf_formudata( high_attr,&offset,NULL );
+      if( res==DW_DLV_OK )
+        *high = *low + offset;
+    }
+  }
+
+  dwarf_dealloc( dbg,high_attr,DW_DLA_ATTR );
 
   return( res );
 }
@@ -89,8 +120,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     return;
 
   Dwarf_Addr low,high;
-  if( dwarf_lowpc(die,&low,NULL)==DW_DLV_OK &&
-      dwarf_highpc(die,&high,NULL)==DW_DLV_OK )
+  if( dwarf_lowhighpc(dbg,die,&low,&high)==DW_DLV_OK )
   {
     if( cuInfo->ptr<low || cuInfo->ptr>=high )
       return;
@@ -213,8 +243,7 @@ int dwstOfFile(
     if( dwarf_dieoffset(die,&cuInfo->offs,NULL)!=DW_DLV_OK )
       cuInfo->offs = 0;
 
-    if( dwarf_lowpc(die,&cuInfo->low,NULL)!=DW_DLV_OK ||
-        dwarf_highpc(die,&cuInfo->high,NULL)!=DW_DLV_OK )
+    if( dwarf_lowhighpc(dbg,die,&cuInfo->low,&cuInfo->high)!=DW_DLV_OK )
     {
       cuInfo->low = cuInfo->high = 0;
 
