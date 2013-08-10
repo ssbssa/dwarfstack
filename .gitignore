@@ -1,0 +1,6 @@
+bin
+lib
+*.swp
+*.o
+*.exe
+*.dll
