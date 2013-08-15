@@ -1,5 +1,5 @@
 
-DWST_VERSION = 0.2-git
+DWST_VERSION = 0.3-git
 
 CC = gcc
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
