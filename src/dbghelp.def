@@ -1,0 +1,18 @@
+
+LIBRARY dbghelp.dll
+
+EXPORTS
+StackWalk64@36 @25
+StackWalk64 @25
+SymCleanup@4 @27
+SymCleanup @27
+SymFunctionTableAccess64@12 @41
+SymFunctionTableAccess64 @41
+SymGetLineFromAddr64@20 @44
+SymGetLineFromAddr64 @44
+SymGetModuleBase64@12 @52
+SymGetModuleBase64 @52
+SymInitialize@12 @70
+SymInitialize @70
+SymSetOptions@4 @81
+SymSetOptions @81

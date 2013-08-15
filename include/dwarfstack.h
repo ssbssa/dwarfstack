@@ -106,4 +106,11 @@ EXPORT int dwstOfException(
     void *context,
     dwstCallback *callbackFunc,void *callbackContext );
 
+
+// dwstExceptionDialog(): show dialog on unhandled exception
+//   extraInfo:         extra information shown in dialog
+//      (for example see examples/exception-dialog/)
+EXPORT void dwstExceptionDialog(
+    const char *extraInfo );
+
 #endif

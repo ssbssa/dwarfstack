@@ -37,6 +37,7 @@ DWST_SRC_REL = dwst-file.c \
 	       dwst-process.c \
 	       dwst-location.c \
 	       dwst-exception.c \
+	       dwst-exception-dialog.c \
 
 DWST_HEADER_REL = dwarfstack.h \
 
@@ -46,7 +47,7 @@ DWST_DLL_OBJ = $(patsubst %.c,%.dll.o,$(DWST_SRC))
 
 
 INC = include/dwarfstack.h
-LIB = lib/libdwarfstack.a lib/libdwarfstack.dll.a
+LIB = lib/libdwarfstack.a lib/libdwarfstack.dll.a lib/libdbghelp.a
 BIN = bin/libdwarfstack.dll
 BUILD = $(LIB) $(BIN) $(INC)
 
@@ -67,8 +68,11 @@ lib/libdwarfstack.a: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
 .c.dll.o:
 	$(CC) -c $(CFLAGS_SHARED) -o $@ $<
 
-bin/libdwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
-	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -Wl,--out-implib,lib/libdwarfstack.dll.a
+lib/libdbghelp.a: src/dbghelp.def | lib
+	dlltool -k -d $< -l $@
+
+bin/libdwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) lib/libdbghelp.a | lib bin
+	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -Llib -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a
 
 lib/libdwarfstack.dll.a: bin/libdwarfstack.dll
 

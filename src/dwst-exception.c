@@ -22,6 +22,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#ifndef NO_DBGHELP
+#include "dbghelp.h"
+#endif
+
 
 int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 {
@@ -52,10 +56,43 @@ int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 #define csp Rsp
 #define cip Rip
 #define cfp Rbp
+#define MACH_TYPE IMAGE_FILE_MACHINE_AMD64
 #else
 #define csp Esp
 #define cip Eip
 #define cfp Ebp
+#define MACH_TYPE IMAGE_FILE_MACHINE_I386
+#endif
+
+#ifndef NO_DBGHELP
+int captureStackWalk( HANDLE process,CONTEXT *context,
+    uint64_t *frames,int size )
+{
+  STACKFRAME64 stack;
+
+  ZeroMemory( &stack,sizeof(STACKFRAME64) );
+  stack.AddrPC.Offset = context->cip;
+  stack.AddrPC.Mode = AddrModeFlat;
+  stack.AddrStack.Offset = context->csp;
+  stack.AddrStack.Mode = AddrModeFlat;
+  stack.AddrFrame.Offset = context->cfp;
+  stack.AddrFrame.Mode = AddrModeFlat;
+
+  int count = 0;
+  HANDLE thread = GetCurrentThread();
+  while( StackWalk64(MACH_TYPE,process,thread,&stack,context,
+        NULL,SymFunctionTableAccess64,SymGetModuleBase64,NULL) &&
+      count<size )
+  {
+    uint64_t frame = stack.AddrPC.Offset;
+    if( !frame ) break;
+
+    if( count ) frame--;
+    frames[count++] = frame;
+  }
+
+  return( count );
+}
 #endif
 
 int dwstOfException(
@@ -66,6 +103,7 @@ int dwstOfException(
   int count = 0;
   CONTEXT *contextP = (CONTEXT*)context;
 
+#ifdef NO_DBGHELP
   frames[count++] = contextP->cip;
 
   ULONG_PTR csp = *(ULONG_PTR*)contextP->csp;
@@ -74,7 +112,19 @@ int dwstOfException(
 
   ULONG_PTR *sp = (ULONG_PTR*)contextP->cfp;
   count += captureStackTrace( sp,frames+count,MAX_FRAMES-count );
+#else
+  HANDLE process = GetCurrentProcess();
+  count += captureStackWalk( process,contextP,frames+count,MAX_FRAMES-count );
 
-  return( dwstOfProcess(frames,count,
-        callbackFunc,callbackContext) );
+  SymSetOptions( SYMOPT_LOAD_LINES );
+  SymInitialize( process,NULL,TRUE );
+#endif
+
+  count = dwstOfProcess( frames,count,callbackFunc,callbackContext );
+
+#ifndef NO_DBGHELP
+  SymCleanup( process );
+#endif
+
+  return( count );
 }
