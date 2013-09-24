@@ -303,6 +303,7 @@ int dwstOfFile(
         {
           int c;
           int onEnd = 1;
+          Dwarf_Addr prevAdd = 0;
           for( c=0; c<lineCount; c++ )
           {
             Dwarf_Addr add;
@@ -312,13 +313,12 @@ int dwstOfFile(
             if( dwarf_lineendsequence(lines[c],&endsequence,NULL)!=DW_DLV_OK )
               break;
 
-            if( add<=ptr )
+            if( onEnd || add<=ptr || prevAdd>ptr )
             {
               onEnd = endsequence;
+              prevAdd = add;
               continue;
             }
-
-            if( onEnd ) break;
 
             dwarf_line_srcfileno( lines[c-1],&srcfileno,NULL );
             dwarf_lineno( lines[c-1],&lineno,NULL );
