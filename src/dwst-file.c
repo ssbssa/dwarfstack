@@ -78,7 +78,11 @@ static int dwarf_lowhighpc( Dwarf_Debug dbg,Dwarf_Die die,
 
   Dwarf_Attribute high_attr;
   res = dwarf_attr( die,DW_AT_high_pc,&high_attr,NULL );
-  if( res!=DW_DLV_OK ) return( res );
+  if( res!=DW_DLV_OK )
+  {
+    *high = 0;
+    return( DW_DLV_OK );
+  }
 
   Dwarf_Half form;
   res = dwarf_whatform( high_attr,&form,NULL );
@@ -120,7 +124,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     return;
 
   Dwarf_Addr low,high;
-  if( dwarf_lowhighpc(dbg,die,&low,&high)==DW_DLV_OK )
+  if( dwarf_lowhighpc(dbg,die,&low,&high)==DW_DLV_OK && high )
   {
     if( cuInfo->ptr<low || cuInfo->ptr>=high )
       return;
@@ -133,6 +137,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
       return;
 
     int i;
+    Dwarf_Addr base = cuInfo->low;
     for( i=0; i<rangeCount; i++ )
     {
       Dwarf_Ranges *range = ranges + i;
@@ -143,8 +148,13 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
       if( range->dwr_type==DW_RANGES_ENTRY )
       {
-        low += cuInfo->low;
-        high += cuInfo->low;
+        low += base;
+        high += base;
+      }
+      else
+      {
+        base = high;
+        continue;
       }
 
       if( cuInfo->ptr<low || cuInfo->ptr>=high )
@@ -243,15 +253,19 @@ int dwstOfFile(
     if( dwarf_dieoffset(die,&cuInfo->offs,NULL)!=DW_DLV_OK )
       cuInfo->offs = 0;
 
-    if( dwarf_lowhighpc(dbg,die,&cuInfo->low,&cuInfo->high)!=DW_DLV_OK )
+    int res = dwarf_lowhighpc( dbg,die,&cuInfo->low,&cuInfo->high );
+    if( res!=DW_DLV_OK || !cuInfo->high )
     {
-      cuInfo->low = cuInfo->high = 0;
+      int hasLow = res==DW_DLV_OK;
+      if( !hasLow ) cuInfo->low = 0;
+      cuInfo->high = 0;
 
       Dwarf_Signed rangeCount;
       Dwarf_Ranges *ranges;
       if( dwarf_ranges(dbg,die,&ranges,&rangeCount)==DW_DLV_OK )
       {
         int i;
+        Dwarf_Addr base = 0;
         for( i=0; i<rangeCount; i++ )
         {
           Dwarf_Ranges *range = ranges + i;
@@ -262,12 +276,22 @@ int dwstOfFile(
 
           if( range->dwr_type==DW_RANGES_ENTRY )
           {
-            low += cuInfo->low;
-            high += cuInfo->low;
+            low += base;
+            high += base;
+          }
+          else
+          {
+            base = high;
+            continue;
           }
 
-          if( !cuInfo->low || low<cuInfo->low )
+          if( !low ) continue;
+
+          if( !hasLow || low<cuInfo->low )
+          {
             cuInfo->low = low;
+            hasLow = 1;
+          }
           if( high>cuInfo->high )
             cuInfo->high = high;
         }
