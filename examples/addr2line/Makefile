@@ -1,6 +1,7 @@
 
 CC = gcc
-CFLAGS = -O3 -Wall -Wextra -I../../include -DDWST_STATIC
+OPT = -O3
+CFLAGS = $(OPT) -Wall -Wextra -I../../include -DDWST_STATIC
 
 
 a2l.exe: a2l.c ../../lib/libdwarfstack.a

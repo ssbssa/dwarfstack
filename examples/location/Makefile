@@ -1,7 +1,8 @@
 
 CC = gcc
+OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
-CFLAGS = -O3 -g -Wall -Wextra -I../../include $(FRAME_POINTER)
+CFLAGS = $(OPT) -g -Wall -Wextra -I../../include $(FRAME_POINTER)
 
 
 location.exe: location.c obj2.c ../../lib/libdwarfstack.dll.a

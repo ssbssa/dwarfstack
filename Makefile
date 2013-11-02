@@ -2,9 +2,11 @@
 DWST_VERSION = 0.3-git
 
 CC = gcc
+CPPFLAGS = -DNO_DBGHELP
+OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
 INCLUDE = -Ilibdwarf -Imgwhelp -Iinclude
-CFLAGS = -O3 -Wall -Wextra $(FRAME_POINTER) $(INCLUDE) -DDWST_MODE
+CFLAGS = $(CPPFLAGS) $(OPT) -Wall -Wextra $(FRAME_POINTER) $(INCLUDE) -DDWST_MODE
 CFLAGS_STATIC = $(CFLAGS) -DDWST_STATIC
 CFLAGS_SHARED = $(CFLAGS) -DDWST_SHARED
 
