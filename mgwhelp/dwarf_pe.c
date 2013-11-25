@@ -226,7 +226,7 @@ dwarf_pe_init(const char *image,
 no_dbg:
     free(intfc);
 no_intfc:
-    ;
+    UnmapViewOfFile(pe_obj->lpFileBase);
 no_view_of_file:
     CloseHandle(pe_obj->hFileMapping);
 no_file_mapping:
@@ -243,8 +243,10 @@ dwarf_pe_finish(Dwarf_Debug dbg,
                 Dwarf_Error *error)
 {
     pe_access_object_t *pe_obj = (pe_access_object_t *)dbg->de_obj_file->object;
+    UnmapViewOfFile(pe_obj->lpFileBase);
     CloseHandle(pe_obj->hFileMapping);
     CloseHandle(pe_obj->hFile);
     free(pe_obj);
+    free(dbg->de_obj_file);
     return dwarf_object_finish(dbg, error);
 }
