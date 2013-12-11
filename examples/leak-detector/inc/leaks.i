@@ -81,9 +81,9 @@ static int alloc_q = 0;
 static int alloc_s = 0;
 
 #ifdef LEAKS_THREAD
-static HANDLE allocMutex = NULL;
-#define MUTEX_LOCK() WaitForSingleObject( allocMutex,INFINITE )
-#define MUTEX_UNLOCK() ReleaseMutex( allocMutex )
+static CRITICAL_SECTION allocMutex;
+#define MUTEX_LOCK() EnterCriticalSection( &allocMutex )
+#define MUTEX_UNLOCK() LeaveCriticalSection( &allocMutex )
 #else
 #define MUTEX_LOCK() do {} while( 0 )
 #define MUTEX_UNLOCK() do {} while( 0 )
@@ -284,7 +284,7 @@ static void endfunc( void )
 #endif
 
 #ifdef LEAKS_THREAD
-  CloseHandle( allocMutex );
+  DeleteCriticalSection( &allocMutex );
 #endif
 
   int i;
@@ -339,7 +339,7 @@ void __wrap___main( void )
     inited = 1;
 
 #ifdef LEAKS_THREAD
-    allocMutex = CreateMutex( NULL,FALSE,NULL );
+    InitializeCriticalSection( &allocMutex );
 #endif
 
 #ifdef LEAKS_EXTRA_INIT
