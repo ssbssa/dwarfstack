@@ -184,14 +184,14 @@ static void printStack( void **rets )
     MUTEX_LOCK(); \
     if( alloc_q>=alloc_s ) \
     { \
-      alloc_s += 128; \
+      alloc_s += 65536; \
       allocation *alloc_an = (allocation*)__real_realloc( \
           alloc_a,alloc_s*sizeof(allocation) ); \
       if( !alloc_an ) \
       { \
         __real_free( alloc_a ); \
         fprintf( stderr,"LEAK DETECTION ERROR: couldn't allocate %" \
-            PRIuPTR " bytes",alloc_s*sizeof(allocation) ); \
+            PRIuPTR " bytes\n",alloc_s*sizeof(allocation) ); \
         alloc_a = NULL; \
         alloc_q = alloc_s = 0; \
         inited = 0; \
@@ -275,7 +275,12 @@ static void *protect_alloc_m( size_t s )
 
   unsigned char *b = (unsigned char*)VirtualAlloc(
       NULL,pages*pageSize,MEM_RESERVE,PAGE_NOACCESS );
-  if( !b ) return( NULL );
+  if( !b )
+  {
+    fprintf( stderr,"ALLOCATION ERROR: couldn't allocate %"
+        PRIuPTR " bytes (%" PRIuPTR ")\n",s,pages*(size_t)pageSize );
+    return( NULL );
+  }
 
 #if LEAKS_PROTECT>1
   b += pageSize;
