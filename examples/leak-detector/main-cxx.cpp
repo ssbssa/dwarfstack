@@ -9,4 +9,6 @@ void cxx_leaks( void );
 int main( void )
 {
   cxx_leaks();
+
+  return( 0 );
 }

@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-void c_leaks( void );
+char *c_leaks( void );
 
 void cxx_leaks( void )
 {

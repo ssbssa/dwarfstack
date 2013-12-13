@@ -4,11 +4,15 @@
 //    (See accompanying file ../LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
+#include <stdio.h>
+
 char *c_leaks( void );
 
 int main( void )
 {
-  c_leaks();
+  char *l = c_leaks();
+  l[3] = l[-5];
+  l[100] = 4;
 
   return( 0 );
 }

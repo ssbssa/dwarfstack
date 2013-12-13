@@ -8,7 +8,7 @@
 #include <string.h>
 #include <stdio.h>
 
-void c_leaks( void )
+char *c_leaks( void )
 {
   char *strdup_leak = strdup( "leak 1" );
   strdup_leak[1] = 0;
@@ -32,4 +32,6 @@ void c_leaks( void )
   calloc_leak[0] = 'c';
   calloc_leak[1] = 0;
   printf( "%s\n",calloc_leak );
+
+  return( malloc_leak );
 }
