@@ -11,5 +11,5 @@ L_EMPTY=
 ,=,
 $(L_EMPTY) $(L_EMPTY)=$(L_EMPTY) $(L_EMPTY)
 
-LEAKS_CFLAGS=-fno-omit-frame-pointer -fno-optimize-sibling-calls
+LEAKS_CFLAGS=-fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-builtin
 LEAKS_LDFLAGS=-Wl,$(subst $( ),$(,),$(patsubst %,--wrap$(,)%,$(LEAKS_FUNC)))
