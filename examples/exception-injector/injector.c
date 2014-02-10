@@ -92,7 +92,7 @@ int main( void )
     printf( "missing argument: application name or process id\n" );
     return( 1 );
   }
-  args++;
+  while( args[0]==' ' ) args++;
 
   char dllPath[MAX_PATH];
   GetModuleFileNameA( NULL,dllPath,MAX_PATH );
