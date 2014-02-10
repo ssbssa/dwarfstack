@@ -24,6 +24,12 @@ typedef struct
 }
 remoteData;
 
+enum {
+  REMOTE_OK,
+  REMOTE_NO_DLL,
+  REMOTE_NO_FUNC,
+};
+
 static DWORD WINAPI remoteCall( remoteData *data )
 {
   const char *dllName = data->texts;
@@ -32,15 +38,15 @@ static DWORD WINAPI remoteCall( remoteData *data )
   funcName++;
 
   HMODULE mod = data->fLoadLibraryA( dllName );
-  if( !mod ) return( 1 );
+  if( !mod ) return( REMOTE_NO_DLL );
 
   func_dwstExceptionDialog *dwstExceptionDialog =
     data->fGetProcAddress( mod,funcName );
-  if( !dwstExceptionDialog ) return( 1 );
+  if( !dwstExceptionDialog ) return( REMOTE_NO_FUNC );
 
   dwstExceptionDialog( NULL );
 
-  return( 0 );
+  return( REMOTE_OK );
 }
 
 static void inject( HANDLE process,const char *dll,const char *func )
@@ -73,6 +79,22 @@ static void inject( HANDLE process,const char *dll,const char *func )
       (LPTHREAD_START_ROUTINE)fullDataRemote,fullDataRemote+funcSize,0,NULL );
 
   WaitForSingleObject( thread,INFINITE );
+
+  DWORD exitCode;
+  if( GetExitCodeThread(thread,&exitCode) )
+  {
+    switch( exitCode )
+    {
+      case REMOTE_NO_DLL:
+        printf( "can't find library '%s'\n",dll );
+        break;
+
+      case REMOTE_NO_FUNC:
+        printf( "can't find function '%s'\n",func );
+        break;
+    }
+  }
+
   CloseHandle( thread );
 
   VirtualFreeEx( process,fullDataRemote,fullSize,MEM_RELEASE );
