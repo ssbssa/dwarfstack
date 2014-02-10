@@ -146,7 +146,7 @@ static void dlgPrint(
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       printAddr( context->hwnd,TEXT("    stack "),context->count++,
-          ptr,filename,0 );
+          ptr,NULL,0 );
       break;
 
     default:
