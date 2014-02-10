@@ -72,11 +72,23 @@ static void inject( HANDLE process,const char *dll,const char *func )
 
   char *fullDataRemote = VirtualAllocEx( process,NULL,
       fullSize,MEM_COMMIT,PAGE_EXECUTE_READWRITE );
+  if( !fullDataRemote )
+  {
+    printf( "can't allocate memory for remote process\n" );
+    free( fullData );
+    return;
+  }
   WriteProcessMemory( process,fullDataRemote,fullData,fullSize,NULL );
   free( fullData );
 
   HANDLE thread = CreateRemoteThread( process,NULL,0,
       (LPTHREAD_START_ROUTINE)fullDataRemote,fullDataRemote+funcSize,0,NULL );
+  if( !thread )
+  {
+    printf( "can't create thread\n" );
+    VirtualFreeEx( process,fullDataRemote,fullSize,MEM_RELEASE );
+    return;
+  }
 
   WaitForSingleObject( thread,INFINITE );
 
@@ -100,6 +112,14 @@ static void inject( HANDLE process,const char *dll,const char *func )
   VirtualFreeEx( process,fullDataRemote,fullSize,MEM_RELEASE );
 }
 
+
+static int isWrongArch( HANDLE process )
+{
+  BOOL remoteWow64,meWow64;
+  IsWow64Process( process,&remoteWow64 );
+  IsWow64Process( GetCurrentProcess(),&meWow64 );
+  return( remoteWow64!=meWow64 );
+}
 
 int main( void )
 {
@@ -141,16 +161,28 @@ int main( void )
       return( 1 );
     }
 
-    inject( process,dllPath,DWST_FUNC );
+    if( isWrongArch(process) )
+      printf( "process %s is of a different architecture\n",args );
+    else
+      inject( process,dllPath,DWST_FUNC );
 
     CloseHandle( process );
 
     return( 0 );
   }
 
-  inject( pi.hProcess,dllPath,DWST_FUNC );
+  if( isWrongArch(pi.hProcess) )
+  {
+    printf( "application '%s' is of a different architecture\n",args );
 
-  ResumeThread( pi.hThread );
+    TerminateProcess( pi.hProcess,1 );
+  }
+  else
+  {
+    inject( pi.hProcess,dllPath,DWST_FUNC );
+
+    ResumeThread( pi.hThread );
+  }
 
   CloseHandle( pi.hThread );
   CloseHandle( pi.hProcess );
