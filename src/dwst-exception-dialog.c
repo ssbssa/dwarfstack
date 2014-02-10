@@ -200,6 +200,13 @@ static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
       (w-50)/2,h-28,50,24,
       hwnd,(HMENU)IDCANCEL,NULL,NULL );
 
+#ifdef DWST_SHARED
+  // needs -lgdi32 -> only in shared library
+  HFONT font = GetStockObject( ANSI_FIXED_FONT );
+  if( font )
+    SendMessage( textHwnd,WM_SETFONT,(WPARAM)font,FALSE );
+#endif
+
 
   {
     TCHAR exeName[MAX_PATH];

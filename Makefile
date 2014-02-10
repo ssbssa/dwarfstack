@@ -74,7 +74,7 @@ lib/libdbghelp.a: src/dbghelp.def | lib
 	dlltool -k -d $< -l $@
 
 bin/dwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) lib/libdbghelp.a | lib bin
-	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -Llib -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a
+	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -Llib -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32
 
 lib/libdwarfstack.dll.a: bin/dwarfstack.dll
 
