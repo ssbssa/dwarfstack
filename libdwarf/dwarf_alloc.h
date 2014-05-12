@@ -3,19 +3,19 @@
    Portions Copyright (C) 2008-2011  David Anderson. All Rights Reserved.
 
    This program is free software; you can redistribute it and/or modify it
-   under the terms of version 2.1 of the GNU Lesser General Public License 
+   under the terms of version 2.1 of the GNU Lesser General Public License
    as published by the Free Software Foundation.
 
    This program is distributed in the hope that it would be useful, but
    WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
    Further, this software is distributed without any warranty that it is
-   free of the rightful claim of any third person regarding infringement 
-   or the like.  Any license provided herein, whether implied or 
+   free of the rightful claim of any third person regarding infringement
+   or the like.  Any license provided herein, whether implied or
    otherwise, applies only to this software file.  Patent licenses, if
-   any, provided herein do not apply to combinations of this program with 
-   other software, or any other product whatsoever.  
+   any, provided herein do not apply to combinations of this program with
+   other software, or any other product whatsoever.
 
    You should have received a copy of the GNU Lesser General Public
    License along with this program; if not, write the Free Software
@@ -49,13 +49,13 @@ typedef struct Dwarf_Free_List_s *Dwarf_Free_List;
 #define ALLOC_AREA_INDEX_TABLE_MAX 45
 /*  ALLOC_AREA_REAL_TABLE_MAX is the size of the array needed
     to hold pointers to dwarf alloc chunk areas.
-    It's smaller as some of the index_into_allocated 
+    It's smaller as some of the index_into_allocated
     entries (they look like {0,1,1,0,0} )
     are treated specially and don't use 'chunks'.
 */
 #define ALLOC_AREA_REAL_TABLE_MAX 32
 
-/* 
+/*
     This struct is used to chain all the deallocated
     structs on the free list of each chain.  The structs
     are chained internally, by using the memory they
@@ -126,7 +126,7 @@ struct Dwarf_Alloc_Area_s {
     /* Points just past the last byte of the blob. */
     Dwarf_Small *aa_blob_end;
 
-    /*  Points to alloc_hdr this alloc_area is linked to: The owner, in 
+    /*  Points to alloc_hdr this alloc_area is linked to: The owner, in
         other words. */
     Dwarf_Alloc_Hdr aa_alloc_hdr;
 

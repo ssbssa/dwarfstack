@@ -6,12 +6,12 @@
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License.
- * 
+ *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -171,20 +171,20 @@ dwarf_pe_init(const char *image,
     }
 
     pe_obj->pNtHeaders = (PIMAGE_NT_HEADERS) (
-        pe_obj->lpFileBase + 
+        pe_obj->lpFileBase +
         pe_obj->pDosHeader->e_lfanew
     );
     pe_obj->Sections = (PIMAGE_SECTION_HEADER) (
-        (PBYTE)pe_obj->pNtHeaders + 
-        sizeof(DWORD) + 
-        sizeof(IMAGE_FILE_HEADER) + 
+        (PBYTE)pe_obj->pNtHeaders +
+        sizeof(DWORD) +
+        sizeof(IMAGE_FILE_HEADER) +
         pe_obj->pNtHeaders->FileHeader.SizeOfOptionalHeader
     );
     pe_obj->pSymbolTable = (PIMAGE_SYMBOL) (
-        pe_obj->lpFileBase + 
+        pe_obj->lpFileBase +
         pe_obj->pNtHeaders->FileHeader.PointerToSymbolTable
     );
-    pe_obj->pStringTable = (PSTR) 
+    pe_obj->pStringTable = (PSTR)
         &pe_obj->pSymbolTable[pe_obj->pNtHeaders->FileHeader.NumberOfSymbols];
 
     if (imagebase) {
