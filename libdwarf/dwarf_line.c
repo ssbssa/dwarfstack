@@ -1,6 +1,6 @@
 /*
    Copyright (C) 2000-2006 Silicon Graphics, Inc.  All Rights Reserved.
-   Portions Copyright (C) 2007-2012 David Anderson. All Rights Reserved.
+   Portions Copyright (C) 2007-2013 David Anderson. All Rights Reserved.
    Portions Copyright (C) 2010-2012 SN Systems Ltd. All Rights Reserved.
    Portions Copyright (C) 2013 Hannes Domani. All rights reserved.
 
@@ -171,7 +171,8 @@ dwarf_srcfiles(Dwarf_Die die,
         return lres;
     }
     if (attrform != DW_FORM_data4 && attrform != DW_FORM_data8 &&
-        attrform != DW_FORM_sec_offset ) {
+        attrform != DW_FORM_sec_offset  &&
+        attrform != DW_FORM_GNU_ref_alt) {
         _dwarf_error(dbg, error, DW_DLE_LINE_OFFSET_BAD);
         return (DW_DLV_ERROR);
     }
@@ -302,12 +303,6 @@ dwarf_srcfiles(Dwarf_Die die,
         }
     }
 
-    curr_chain = (Dwarf_Chain) _dwarf_get_alloc(dbg, DW_DLA_CHAIN, 1);
-    if (curr_chain == NULL) {
-        dwarf_free_line_table_prefix(&line_prefix);
-        _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-        return (DW_DLV_ERROR);
-    }
     if (line_prefix.pf_files_count == 0) {
         *srcfiles = NULL;
         *srcfilecount = 0;
@@ -1670,25 +1665,25 @@ print_header_issue(Dwarf_Debug UNUSED(dbg),
     }
     /* Are we in verbose mode */
 #ifndef DWST_MODE
-    if (dwarf_cmdline_options.check_verbose_mode) {
-        /*  When redirecting stderr into stdout or vice versa,
-            ensure lines come out at the 'right time' with fflush. */
-        fflush(stderr);
-        fflush(stdout);
-        printf("\n*** DWARF CHECK: "
+    if (dwarf_cmdline_options.check_verbose_mode){
+        dwarf_printf(dbg,
+            "\n*** DWARF CHECK: "
             ".debug_line: %s", specific_msg);
+
         if (data_start >= dbg->de_debug_line.dss_data &&
             (data_start < (dbg->de_debug_line.dss_data +
             dbg->de_debug_line.dss_size))) {
             Dwarf_Unsigned off = data_start - dbg->de_debug_line.dss_data;
-            printf(" at offset 0x%" DW_PR_XZEROS DW_PR_DUx
+            dwarf_printf(dbg,
+                " at offset 0x%" DW_PR_XZEROS DW_PR_DUx
                 "  ( %" DW_PR_DUu " ) ",
                 off,off);
         } else {
-            printf(" (unknown section location) ");
+            dwarf_printf(dbg,
+                " (unknown section location) ");
         }
-        printf("***\n");
-        fflush(stdout);
+        dwarf_printf(dbg,
+            "***\n");
     }
 #endif
     *err_count_out += 1;

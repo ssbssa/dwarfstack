@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2014 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -70,36 +70,23 @@ static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,
 }
 
 // get low_pc and high_pc of specified DIE
-static int dwarf_lowhighpc( Dwarf_Debug dbg,Dwarf_Die die,
+static int dwarf_lowhighpc( Dwarf_Die die,
     Dwarf_Addr *low,Dwarf_Addr *high )
 {
   int res = dwarf_lowpc( die,low,NULL );
   if( res!=DW_DLV_OK ) return( res );
 
-  Dwarf_Attribute high_attr;
-  res = dwarf_attr( die,DW_AT_high_pc,&high_attr,NULL );
+  Dwarf_Half form;
+  enum Dwarf_Form_Class class;
+  res = dwarf_highpc_b( die,high,&form,&class,NULL );
   if( res!=DW_DLV_OK )
   {
     *high = 0;
     return( DW_DLV_OK );
   }
 
-  Dwarf_Half form;
-  res = dwarf_whatform( high_attr,&form,NULL );
-  if( res==DW_DLV_OK )
-  {
-    if( form==DW_FORM_addr )
-      res = dwarf_highpc( die,high,NULL );
-    else
-    {
-      Dwarf_Unsigned offset;
-      res = dwarf_formudata( high_attr,&offset,NULL );
-      if( res==DW_DLV_OK )
-        *high = *low + offset;
-    }
-  }
-
-  dwarf_dealloc( dbg,high_attr,DW_DLA_ATTR );
+  if( class!=DW_FORM_CLASS_ADDRESS )
+    *high += *low;
 
   return( res );
 }
@@ -124,7 +111,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     return;
 
   Dwarf_Addr low,high;
-  if( dwarf_lowhighpc(dbg,die,&low,&high)==DW_DLV_OK && high )
+  if( dwarf_lowhighpc(die,&low,&high)==DW_DLV_OK && high )
   {
     if( cuInfo->ptr<low || cuInfo->ptr>=high )
       return;
@@ -253,7 +240,7 @@ int dwstOfFile(
     if( dwarf_dieoffset(die,&cuInfo->offs,NULL)!=DW_DLV_OK )
       cuInfo->offs = 0;
 
-    int res = dwarf_lowhighpc( dbg,die,&cuInfo->low,&cuInfo->high );
+    int res = dwarf_lowhighpc( die,&cuInfo->low,&cuInfo->high );
     if( res!=DW_DLV_OK || !cuInfo->high )
     {
       int hasLow = res==DW_DLV_OK;

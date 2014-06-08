@@ -1,7 +1,7 @@
 /*
 
   Copyright (C) 2000-2005 Silicon Graphics, Inc. All Rights Reserved.
-  Portions Copyright (C) 2008-2011 David Anderson.  All Rights Reserved.
+  Portions Copyright (C) 2008-2014 David Anderson.  All Rights Reserved.
   Portions Copyright (C) 2013 Hannes Domani. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
@@ -23,15 +23,6 @@
   License along with this program; if not, write the Free Software
   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
   USA.
-
-  Contact information:  Silicon Graphics, Inc., 1500 Crittenden Lane,
-  Mountain View, CA 94043, or:
-
-  http://www.sgi.com
-
-  For further information regarding this notice, see:
-
-  http://oss.sgi.com/projects/GenInfo/NoticeExplan
 
 */
 
@@ -329,6 +320,25 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_DEBUG_TYPES_ONLY_DWARF4 (238)",
     "DW_DLE_DEBUG_TYPEOFFSET_BAD (239)",
     "DW_DLE_GNU_OPCODE_ERROR (240)",
+    "DW_DLE_DEBUGPUBTYPES_ERROR (241), could not create pubtypes section",
+    "DW_DLE_AT_FIXUP_NULL (242)",
+    "DW_DLE_AT_FIXUP_DUP (243)",
+    "DW_DLE_BAD_ABINAME (244)",
+    "DW_DLE_TOO_MANY_DEBUG(245), too many .debug_* sections present somehow",
+    "DW_DLE_DEBUG_STR_OFFSETS_DUPLICATE(246)",
+    "DW_DLE_SECTION_DUPLICATION(247)",
+    "DW_DLE_SECTION_ERROR(248)",
+    "DW_DLE_DEBUG_ADDR_DUPLICATE(249)",
+    "DW_DLE_DEBUG_CU_UNAVAILABLE_FOR_FORM(250)",
+    "DW_DLE_DEBUG_FORM_HANDLING_INCOMPLETE(251)",
+    "DW_DLE_NEXT_DIE_PAST_END(252)",
+    "DW_DLE_NEXT_DIE_WRONG_FORM(253)",
+    "DW_DLE_NEXT_DIE_NO_ABBREV_LIST(254)",
+    "DW_DLE_NESTED_FORM_INDIRECT_ERROR(255)",
+    "DW_DLE_CU_DIE_NO_ABBREV_LIST(256)",
+    "DW_DLE_MISSING_NEEDED_DEBUG_ADDR_SECTION(257)",
+    "DW_DLE_ATTR_FORM_NOT_ADDR_INDEX(258)",
+    "DW_DLE_ATTR_FORM_NOT_STR_INDEX(259)",
 };
 #endif
 

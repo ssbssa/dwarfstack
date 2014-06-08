@@ -27,15 +27,6 @@
   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
   USA.
 
-  Contact information:  Silicon Graphics, Inc., 1500 Crittenden Lane,
-  Mountain View, CA 94043, or:
-
-  http://www.sgi.com
-
-  For further information regarding this notice, see:
-
-  http://oss.sgi.com/projects/GenInfo/NoticeExplan
-
 */
 
 
@@ -789,41 +780,55 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLC_RDWR        2        /* read/write access NOT SUPPORTED*/
 
 /* dwarf_producer_init*() access flag modifiers
-   If HAVE_DWARF2_99_EXTENSION is defined at libdwarf build time
-   and DW_DLC_OFFSET_SIZE_64  is passed in producer_init()
-   flags then the DWARF3 64 bit offset extension is used
-   to generate 64 bit offsets.
+   No longer depends on compile-time settings for
+   how to produce 64bit offset. See DW_DLC_IRIX_OFFSET64.
+   Historic  versions. One of
+   If DW_DLC_POINTER64 is not set DW_DLC_POINTER32 is assumed.
+   If DW_DLC_OFFSET64 or DW_DLC_IRIX_OFFSET64 is not
+   set 32bit offset DWARF is assumed.
+   Non-MIPS Non IA64 should use DW_DLC_SYMBOLIC_RELOCATIONS
+   and handle the relocation creation for the target
+   itself using the symbolic relocations to do so, those
+   use the Dwarf_Rel_Type enum relocation indicators.
+
 */
-#define DW_DLC_SIZE_64     0x40000000 /* 64-bit address-size target */
-#define DW_DLC_SIZE_32     0x20000000 /* 32-bit address-size target */
-#define DW_DLC_OFFSET_SIZE_64 0x10000000 /* 64-bit offset-size DWARF */
+/*  The first three are traditional dwarf producer names.
+    These names still work.
+    Newer names below.
+*/
+#define DW_DLC_SIZE_64              0x40000000 /* 64-bit address-size target */
+#define DW_DLC_SIZE_32              0x20000000 /* 32-bit address-size target */
+#define DW_DLC_OFFSET_SIZE_64       0x10000000 /* 64-bit offset-size DWARF */
 
 /* dwarf_producer_init*() access flag modifiers
+   Some new April 2014.
+   If DW_DLC_STREAM_RELOCATIONS is set the
+   DW_DLC_ISA_* flags are ignored. See the Dwarf_Rel_Type enum.
 */
-#define DW_DLC_ISA_MIPS             0x00000000 /* MIPS target */
-#define DW_DLC_ISA_IA64             0x01000000 /* IA64 target */
-#define DW_DLC_STREAM_RELOCATIONS   0x02000000 /* Old style binary relocs */
 
-    /*  Usable with assembly output because it is up to the producer to
-        deal with locations in whatever manner the producer code wishes.
-        Possibly emitting text an assembler will recognize. */
+/* Old style Elf binary relocation (.rel) records. The default. */
+#define DW_DLC_STREAM_RELOCATIONS   0x02000000
+
+#define DW_DLC_OFFSET32             0x00010000 /* use 32-bit sec offsets */
+/* The following 3 are new sensible names. Old names above with same values. */
+#define DW_DLC_OFFSET64             0x10000000 /* use 64-bit sec offsets */
+#define DW_DLC_POINTER32            0x20000000 /* use 4 for address_size */
+#define DW_DLC_POINTER64            0x40000000 /* use 8 for address_size */
+/* Special for IRIX only */
+#define DW_DLC_IRIX_OFFSET64        0x00200000 /* use non-std IRIX 64bitoffset headers  */
+
+/*  Usable with assembly output because it is up to the producer to
+    deal with locations in whatever manner the calling producer
+    code wishes.  For example, when the libdwarf caller wishes
+    to produce relocations differently than the binary
+    relocation bits that libdwarf Stream Relocations generate.
+    */
 #define DW_DLC_SYMBOLIC_RELOCATIONS 0x04000000
+
 
 #define DW_DLC_TARGET_BIGENDIAN     0x08000000 /* Big    endian target */
 #define DW_DLC_TARGET_LITTLEENDIAN  0x00100000 /* Little endian target */
 
-#if 0
-  /*
-   The libdwarf producer interfaces jumble these two semantics together in
-   confusing ways.  We *should* have flags like these...
-   But changing the code means a lot of diffs.  So for now,
-   we leave things as they are
-  */
-  #define DW_DLC_SUN_OFFSET32        0x00010000 /* use 32-bit sec offsets */
-  #define DW_DLC_SUN_OFFSET64        0x00020000 /* use 64-bit sec offsets */
-  #define DW_DLC_SUN_POINTER32        0x00040000 /* use 4 for address_size */
-  #define DW_DLC_SUN_POINTER64        0x00080000 /* use 8 for address_size */
-#endif
 
 /* dwarf_pcline() slide arguments
 */
@@ -1076,10 +1081,29 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLE_DEBUG_TYPES_ONLY_DWARF4         238
 #define DW_DLE_DEBUG_TYPEOFFSET_BAD            239
 #define DW_DLE_GNU_OPCODE_ERROR                240
+#define DW_DLE_DEBUGPUBTYPES_ERROR             241
+#define DW_DLE_AT_FIXUP_NULL                   242
+#define DW_DLE_AT_FIXUP_DUP                    243
+#define DW_DLE_BAD_ABINAME                     244
+#define DW_DLE_TOO_MANY_DEBUG                  245
+#define DW_DLE_DEBUG_STR_OFFSETS_DUPLICATE     246
+#define DW_DLE_SECTION_DUPLICATION             247
+#define DW_DLE_SECTION_ERROR                   248
+#define DW_DLE_DEBUG_ADDR_DUPLICATE            249
+#define DW_DLE_DEBUG_CU_UNAVAILABLE_FOR_FORM   250
+#define DW_DLE_DEBUG_FORM_HANDLING_INCOMPLETE  251
+#define DW_DLE_NEXT_DIE_PAST_END               252
+#define DW_DLE_NEXT_DIE_WRONG_FORM             253
+#define DW_DLE_NEXT_DIE_NO_ABBREV_LIST         254
+#define DW_DLE_NESTED_FORM_INDIRECT_ERROR      255
+#define DW_DLE_CU_DIE_NO_ABBREV_LIST           256
+#define DW_DLE_MISSING_NEEDED_DEBUG_ADDR_SECTION 257
+#define DW_DLE_ATTR_FORM_NOT_ADDR_INDEX        258
+#define DW_DLE_ATTR_FORM_NOT_STR_INDEX         259
 
 
     /* DW_DLE_LAST MUST EQUAL LAST ERROR NUMBER */
-#define DW_DLE_LAST        239
+#define DW_DLE_LAST        259
 #define DW_DLE_LO_USER     0x10000
 
     /*  Taken as meaning 'undefined value', this is not
@@ -1122,6 +1146,30 @@ struct Dwarf_Obj_Access_Interface_s {
    source file to generate Exception tables for this function. */
 #define DW_DLX_EH_OFFSET_UNAVAILABLE  (-2LL)
 
+/* The dwarf specification separates FORMs into
+different classes.  To do the seperation properly
+requires 4 pieces of data as of DWARF4 (thus the
+function arguments listed here).
+The DWARF4 specification class definition suffices to
+describe all DWARF versions.
+See section 7.5.4, Attribute Encodings.
+A return of DW_FORM_CLASS_UNKNOWN means we could not properly figure
+out what form-class it is.
+
+    DW_FORM_CLASS_FRAMEPTR is MIPS/IRIX only, and refers
+    to the DW_AT_MIPS_fde attribute (a reference to the
+    .debug_frame section).
+*/
+enum Dwarf_Form_Class {
+    DW_FORM_CLASS_UNKNOWN,   DW_FORM_CLASS_ADDRESS,
+    DW_FORM_CLASS_BLOCK,     DW_FORM_CLASS_CONSTANT,
+    DW_FORM_CLASS_EXPRLOC,   DW_FORM_CLASS_FLAG,
+    DW_FORM_CLASS_LINEPTR,   DW_FORM_CLASS_LOCLISTPTR,
+    DW_FORM_CLASS_MACPTR,    DW_FORM_CLASS_RANGELISTPTR,
+    DW_FORM_CLASS_REFERENCE, DW_FORM_CLASS_STRING,
+    DW_FORM_CLASS_FRAMEPTR
+};
+
 
 /*===========================================================================*/
 /*  Dwarf consumer interface initialization and termination operations */
@@ -1160,6 +1208,7 @@ int dwarf_object_init(Dwarf_Obj_Access_Interface* /* obj */,
 
 int dwarf_object_finish(Dwarf_Debug /* dbg */,
     Dwarf_Error* /* error */);
+
 
 /*  Die traversal operations.
     dwarf_next_cu_header_b() traverses debug_info CU headers.
@@ -1394,6 +1443,21 @@ int dwarf_lowpc(Dwarf_Die /*die*/,
     Dwarf_Addr  *    /*returned_addr*/,
     Dwarf_Error*     /*error*/);
 
+/*  When the highpc attribute is of class  'constant'
+    it is not an address, it is an offset from the
+    base address (such as lowpc) of the function.
+    This is therefore a required interface for DWARF4
+    style DW_AT_highpc.
+    */
+int dwarf_highpc_b(Dwarf_Die /*die*/,
+    Dwarf_Addr  *           /*return_value*/,
+    Dwarf_Half  *           /*return_form*/,
+    enum Dwarf_Form_Class * /*return_class*/,
+    Dwarf_Error *           /*error*/);
+
+/*  This works for DWARF2 and DWARF3 styles of DW_AT_highpc,
+    but not for the DWARF4 class constant forms.
+    If the FORM is of class constant this returns an error */
 int dwarf_highpc(Dwarf_Die /*die*/,
     Dwarf_Addr  *    /*returned_addr*/,
     Dwarf_Error*     /*error*/);
@@ -1474,6 +1538,15 @@ int dwarf_formaddr(Dwarf_Attribute /*attr*/,
     Dwarf_Addr   *   /*returned_addr*/,
     Dwarf_Error*     /*error*/);
 
+/*  Part of DebugFission.  So a consumer can get the index when
+    the object with the actual .debug_addr section is
+    elsewhere. And so a print application can
+    print the index.  New May 2014*/
+int dwarf_get_debug_addr_index(Dwarf_Attribute /*attr*/,
+    Dwarf_Unsigned * /*return_index*/,
+    Dwarf_Error * /*error*/);
+
+
 int dwarf_formflag(Dwarf_Attribute /*attr*/,
     Dwarf_Bool *     /*returned_bool*/,
     Dwarf_Error*     /*error*/);
@@ -1493,6 +1566,16 @@ int dwarf_formblock(Dwarf_Attribute /*attr*/,
 int dwarf_formstring(Dwarf_Attribute /*attr*/,
     char   **        /*returned_string*/,
     Dwarf_Error*     /*error*/);
+
+/* DebugFission.  So a DWARF print application can
+   get the string index (DW_FORM_strx) and print it.
+   A convenience function.
+   New May 2014. */
+int
+dwarf_get_debug_str_index(Dwarf_Attribute /*attr*/,
+    Dwarf_Unsigned * /*return_index*/,
+    Dwarf_Error * /*error*/);
+
 
 int dwarf_formexprloc(Dwarf_Attribute /*attr*/,
     Dwarf_Unsigned * /*return_exprlen*/,
@@ -2067,6 +2150,39 @@ int _dwarf_print_lines(Dwarf_Die /*cu_die*/,Dwarf_Error * /*error*/);
 int dwarf_print_lines(Dwarf_Die /*cu_die*/,Dwarf_Error * /*error*/,
    int * /*error_count_out */);
 
+/*  As of August 2013, dwarf_print_lines() no longer uses printf.
+    Instead it calls back to the application using a function pointer
+    once per line-to-print.  The lines passed back already have any needed
+    newlines.    The following struct is used to initialize
+    the callback mechanism.
+
+    Failing to call the dwarf_register_printf_callback() function will
+    prevent the lines from being passed back but such omission
+    is not an error.
+    See libdwarf2.1.mm for further documentation.
+
+    The return value is the previous set of callback values.
+*/
+
+typedef void (* dwarf_printf_callback_function_type)(void * /*user_pointer*/,
+    const char * /*linecontent*/);
+
+struct Dwarf_Printf_Callback_Info_s {
+    void *                        dp_user_pointer;
+    dwarf_printf_callback_function_type dp_fptr;
+    char *                        dp_buffer;
+    unsigned int                  dp_buffer_len;
+    int                           dp_buffer_user_provided;
+    void *                        dp_reserved;
+};
+
+/*  If called with a NULL newvalues pointer, it simply returns
+    the current set of values for this Dwarf_Debug. */
+struct  Dwarf_Printf_Callback_Info_s
+dwarf_register_printf_callback(Dwarf_Debug /*dbg*/,
+    struct  Dwarf_Printf_Callback_Info_s * /*newvalues*/);
+
+
 /*  dwarf_check_lineheader lets dwarfdump get detailed messages
     about some compiler errors we detect.
     We return the count of detected errors through the
@@ -2154,30 +2270,6 @@ int dwarf_get_die_address_size(Dwarf_Die /*die*/,
     Dwarf_Half  *    /*addr_size*/,
     Dwarf_Error *    /*error*/);
 
-/* The dwarf specification separates FORMs into
-different classes.  To do the seperation properly
-requires 4 pieces of data as of DWARF4 (thus the
-function arguments listed here).
-The DWARF4 specification class definition suffices to
-describe all DWARF versions.
-See section 7.5.4, Attribute Encodings.
-A return of DW_FORM_CLASS_UNKNOWN means we could not properly figure
-out what form-class it is.
-
-    DW_FORM_CLASS_FRAMEPTR is MIPS/IRIX only, and refers
-    to the DW_AT_MIPS_fde attribute (a reference to the
-    .debug_frame section).
-*/
-enum Dwarf_Form_Class {
-    DW_FORM_CLASS_UNKNOWN,   DW_FORM_CLASS_ADDRESS,
-    DW_FORM_CLASS_BLOCK,     DW_FORM_CLASS_CONSTANT,
-    DW_FORM_CLASS_EXPRLOC,   DW_FORM_CLASS_FLAG,
-    DW_FORM_CLASS_LINEPTR,   DW_FORM_CLASS_LOCLISTPTR,
-    DW_FORM_CLASS_MACPTR,    DW_FORM_CLASS_RANGELISTPTR,
-    DW_FORM_CLASS_REFERENCE, DW_FORM_CLASS_STRING,
-    DW_FORM_CLASS_FRAMEPTR
-};
-
 enum Dwarf_Form_Class dwarf_get_form_class(
     Dwarf_Half /* dwversion */,
     Dwarf_Half /* attrnum */,
@@ -2228,8 +2320,8 @@ void dwarf_dealloc(Dwarf_Debug /*dbg*/, void* /*space*/,
 /* DWARF Producer Interface */
 
 /*  New form June, 2011. Adds user_data argument. */
-typedef int (*Dwarf_Callback_Func_c)(
-    char*           /*name*/,
+typedef int (*Dwarf_Callback_Func)(
+    const char*     /*name*/,
     int             /*size*/,
     Dwarf_Unsigned  /*type*/,
     Dwarf_Unsigned  /*flags*/,
@@ -2239,52 +2331,20 @@ typedef int (*Dwarf_Callback_Func_c)(
     void *          /*user_data*/,
     int*            /*error*/);
 
-/* New form June, 2011. Adds user_data */
-Dwarf_P_Debug dwarf_producer_init_c(
+/*  Returns DW_DLV_OK or DW_DLV_ERROR and
+    if DW_DLV_OK returns the Dwarf_P_Debug
+    pointer through the dbg_returned argument. */
+int dwarf_producer_init(
     Dwarf_Unsigned        /*flags*/,
-    Dwarf_Callback_Func_c /*func*/,
+    Dwarf_Callback_Func   /*func*/,
     Dwarf_Handler         /*errhand*/,
     Dwarf_Ptr             /*errarg*/,
     void *                /*user_data*/,
+    const char *isa_name, /* See isa/abi names in pro_init.c */
+    const char *dwarf_version, /* V2 V3 V4 or V5. */
+    const char *extra,    /* Extra input strings, comma separated. */
+    Dwarf_P_Debug *,      /* dbg_returned */
     Dwarf_Error *         /*error*/);
-
-typedef int (*Dwarf_Callback_Func_b)(
-    char*           /*name*/,
-    int             /*size*/,
-    Dwarf_Unsigned  /*type*/,
-    Dwarf_Unsigned  /*flags*/,
-    Dwarf_Unsigned  /*link*/,
-    Dwarf_Unsigned  /*info*/,
-    Dwarf_Unsigned* /*sect_name_index*/,
-    int*            /*error*/);
-
-/* Intermediate form. Made obsolescent by dwarf_producer_init_c,
-   but supported. */
-Dwarf_P_Debug dwarf_producer_init_b(
-    Dwarf_Unsigned        /*flags*/,
-    Dwarf_Callback_Func_b /*func*/,
-    Dwarf_Handler         /*errhand*/,
-    Dwarf_Ptr             /*errarg*/,
-    Dwarf_Error *         /*error*/);
-
-/* Original, oldest form. From 1991. */
-typedef int (*Dwarf_Callback_Func)(
-    char*           /*name*/,
-    int             /*size*/,
-    Dwarf_Unsigned  /*type*/,
-    Dwarf_Unsigned  /*flags*/,
-    Dwarf_Unsigned  /*link*/,
-    Dwarf_Unsigned  /*info*/,
-    int*            /*sect name index*/,
-    int*            /*error*/);
-
-/* Original, oldest form. From 1991. */
-Dwarf_P_Debug dwarf_producer_init(
-    Dwarf_Unsigned  /*creation_flags*/,
-    Dwarf_Callback_Func    /*func*/,
-    Dwarf_Handler   /*errhand*/,
-    Dwarf_Ptr       /*errarg*/,
-    Dwarf_Error*    /*error*/);
 
 Dwarf_Signed dwarf_transform_to_disk_form(Dwarf_P_Debug /*dbg*/,
     Dwarf_Error*     /*error*/);
@@ -2385,6 +2445,32 @@ Dwarf_P_Attribute dwarf_add_AT_reference(Dwarf_P_Debug /*dbg*/,
     Dwarf_P_Die     /*otherdie*/,
     Dwarf_Error*    /*error*/);
 
+/*  dwarf_add_AT_reference_b allows otherdie to be NULL with
+    the assumption the caller will then later call
+    dwarf_fixup_AT_reference_die() with a non-null target die.
+    New 22 October, 2013
+*/
+Dwarf_P_Attribute dwarf_add_AT_reference_b(Dwarf_P_Debug /*dbg*/,
+    Dwarf_P_Die     /*ownerdie*/,
+    Dwarf_Half      /*attr*/,
+    Dwarf_P_Die     /*otherdie*/,
+    Dwarf_Error*    /*error*/);
+
+/* The following is for out-of-order cu-local
+   references.  Allowing nominating the target Dwarf_P_Die
+   after calling dwarf_add_AT_reference with a NULL otherdie
+   after a single pass thru the DIE generation. Needed
+   for forward-references.
+   New 22 October, 2013.
+*/
+int
+dwarf_fixup_AT_reference_die(Dwarf_P_Debug /*dbg */,
+    Dwarf_Half    /* attrnum */,
+    Dwarf_P_Die   /* sourcedie*/,
+    Dwarf_P_Die   /* targetdie*/,
+    Dwarf_Error * /*error*/);
+
+
 Dwarf_P_Attribute dwarf_add_AT_dataref(
     Dwarf_P_Debug   /* dbg*/,
     Dwarf_P_Die     /*ownerdie*/,
@@ -2419,10 +2505,24 @@ Dwarf_P_Attribute dwarf_add_AT_producer(Dwarf_P_Die /*ownerdie*/,
     char*           /*producer_string*/,
     Dwarf_Error*    /*error*/);
 
+/* August 2013 sleb creator. For any attribute. */
+Dwarf_P_Attribute dwarf_add_AT_any_value_sleb(Dwarf_P_Die /*ownerdie*/,
+    Dwarf_Half    /*attrnum*/,
+    Dwarf_Signed  /*signed_value*/,
+    Dwarf_Error * /*error*/);
+
+/* Original sleb creator. Only for DW_AT_const_value. */
 Dwarf_P_Attribute dwarf_add_AT_const_value_signedint(Dwarf_P_Die /*ownerdie*/,
     Dwarf_Signed    /*signed_value*/,
     Dwarf_Error*    /*error*/);
 
+/* August 2013 uleb creator. For any attribute. */
+Dwarf_P_Attribute dwarf_add_AT_any_value_uleb(Dwarf_P_Die /*ownerdie*/,
+    Dwarf_Half      /*attrnum*/,
+    Dwarf_Unsigned  /*signed_value*/,
+    Dwarf_Error *   /*error*/);
+
+/* Original uleb creator. Only for DW_AT_const_value. */
 Dwarf_P_Attribute dwarf_add_AT_const_value_unsignedint(
     Dwarf_P_Die     /*ownerdie*/,
     Dwarf_Unsigned  /*unsigned_value*/,
@@ -2435,6 +2535,14 @@ Dwarf_P_Attribute dwarf_add_AT_comp_dir(Dwarf_P_Die /*ownerdie*/,
 Dwarf_P_Attribute dwarf_add_AT_name(Dwarf_P_Die    /*die*/,
     char*           /*name*/,
     Dwarf_Error*    /*error*/);
+
+Dwarf_P_Attribute
+dwarf_add_AT_with_ref_sig8(
+   Dwarf_P_Die   /*ownerdie */,
+   Dwarf_Half    /*attrnum */,
+   const Dwarf_Sig8 *  /*sig8_in*/,
+   Dwarf_Error * /*error*/);
+
 
 /* Producer line creation functions (.debug_line) */
 Dwarf_Unsigned dwarf_add_directory_decl(Dwarf_P_Debug /*dbg*/,
@@ -2696,6 +2804,14 @@ Dwarf_Unsigned dwarf_add_pubname(
     Dwarf_P_Die        /*die*/,
     char*              /*pubname_name*/,
     Dwarf_Error*       /*error*/);
+
+/* Added 17 October 2013.  Introduced in DWARF3. */
+Dwarf_Unsigned dwarf_add_pubtype(
+    Dwarf_P_Debug      /*dbg*/,
+    Dwarf_P_Die        /*die*/,
+    char*              /*pubtype_name*/,
+    Dwarf_Error*       /*error*/);
+
 
 Dwarf_Unsigned dwarf_add_funcname(
     Dwarf_P_Debug      /*dbg*/,

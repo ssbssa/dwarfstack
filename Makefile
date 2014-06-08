@@ -21,6 +21,7 @@ DWARF_SRC_REL = dwarf_alloc.c \
 		dwarf_line.c \
 		dwarf_query.c \
 		dwarf_ranges.c \
+		dwarf_tsearchhash.c \
 		dwarf_util.c \
 
 DWARF_SRC = $(patsubst %,libdwarf/%,$(DWARF_SRC_REL))

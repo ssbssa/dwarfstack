@@ -171,6 +171,5 @@ dwarf_ranges_dealloc(Dwarf_Debug dbg, Dwarf_Ranges * rangesbuf,
     Dwarf_Signed UNUSED(rangecount))
 {
     dwarf_dealloc(dbg,rangesbuf, DW_DLA_RANGES);
-
 }
 
