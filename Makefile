@@ -102,5 +102,8 @@ install: $(BUILD)
 
 
 # package
-package: $(BUILD)
-	tar -cJf dwarfstack-$(DWST_VERSION).tar.xz $(BUILD)
+package: $(BUILD) LICENSE.txt
+	tar -cJf dwarfstack-$(DWST_VERSION)-mingw.tar.xz $^
+
+package-src:
+	git archive "HEAD^{tree}" |xz >dwarfstack-$(DWST_VERSION).tar.xz
