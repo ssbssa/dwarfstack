@@ -386,7 +386,6 @@ _dwarf_get_value_ptr(Dwarf_Die die,
 }
 
 
-#ifndef DWST_MODE
 int
 dwarf_diename(Dwarf_Die die, char **ret_name, Dwarf_Error * error)
 {
@@ -459,6 +458,7 @@ dwarf_diename(Dwarf_Die die, char **ret_name, Dwarf_Error * error)
 }
 
 
+#ifndef DWST_MODE
 int
 dwarf_hasattr(Dwarf_Die die,
     Dwarf_Half attr,

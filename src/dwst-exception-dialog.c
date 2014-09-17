@@ -73,7 +73,7 @@ struct dialog_info
 };
 
 static void printAddr( HWND hwnd,const TCHAR *beg,int num,
-    void *ptr,const TCHAR *posFile,int posLine )
+    void *ptr,const TCHAR *posFile,int posLine,const TCHAR *funcName )
 {
   TCHAR hexNum[20];
 
@@ -104,14 +104,23 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
     Edit_ReplaceSel( hwnd,TEXT(")") );
   }
 
+  if( funcName )
+  {
+    Edit_ReplaceSel( hwnd,TEXT(" [") );
+    Edit_ReplaceSel( hwnd,funcName );
+    Edit_ReplaceSel( hwnd,TEXT("]") );
+  }
+
   Edit_ReplaceSel( hwnd,TEXT("\r\n") );
 }
 
 static void dlgPrint(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     struct dialog_info *context )
 {
 #ifndef NO_DBGHELP
+  char buffer[sizeof(SYMBOL_INFO)+100];
+  SYMBOL_INFO *si = (SYMBOL_INFO*)&buffer;
   if( lineno==DWST_NO_DBG_SYM )
   {
     IMAGEHLP_LINE64 ihl;
@@ -123,6 +132,11 @@ static void dlgPrint(
       filename = ihl.FileName;
       lineno = ihl.LineNumber;
     }
+
+    DWORD64 displ2;
+    si->MaxNameLen = 100;
+    if( SymFromAddr(GetCurrentProcess(),addr,&displ2,si) )
+      funcname = si->Name;
   }
 #endif
 
@@ -139,19 +153,19 @@ static void dlgPrint(
       context->lastBase = ptr;
 
       printAddr( context->hwnd,TEXT("base address"),-1,
-          ptr,filename,0 );
+          ptr,filename,0,NULL );
       break;
 
     case DWST_NOT_FOUND:
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       printAddr( context->hwnd,TEXT("    stack "),context->count++,
-          ptr,NULL,0 );
+          ptr,NULL,0,funcname );
       break;
 
     default:
       printAddr( context->hwnd,TEXT("    stack "),context->count++,
-          ptr,filename,lineno );
+          ptr,filename,lineno,funcname );
       break;
   }
 }

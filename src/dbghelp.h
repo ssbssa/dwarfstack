@@ -57,6 +57,24 @@ typedef struct _tagSTACKFRAME64 {
   KDHELP64  KdHelp;
 } STACKFRAME64, *LPSTACKFRAME64;
 
+typedef struct _SYMBOL_INFO {
+  ULONG   SizeOfStruct;
+  ULONG   TypeIndex;
+  ULONG64 Reserved[2];
+  ULONG   Index;
+  ULONG   Size;
+  ULONG64 ModBase;
+  ULONG   Flags;
+  ULONG64 Value;
+  ULONG64 Address;
+  ULONG   Register;
+  ULONG   Scope;
+  ULONG   Tag;
+  ULONG   NameLen;
+  ULONG   MaxNameLen;
+  TCHAR   Name[1];
+} SYMBOL_INFO, *PSYMBOL_INFO;
+
 typedef BOOL CALLBACK PREAD_PROCESS_MEMORY_ROUTINE64(
     HANDLE hProcess, DWORD64 lpBaseAddress, PVOID lpBuffer,
     DWORD nSize, LPDWORD lpNumberOfBytesRead );
@@ -92,5 +110,8 @@ BOOL WINAPI SymGetLineFromAddr64(
   PIMAGEHLP_LINE64 Line );
 
 BOOL WINAPI SymCleanup( HANDLE hProcess );
+
+BOOL WINAPI SymFromAddr( HANDLE hProcess, DWORD64 Address,
+    PDWORD64 Displacement, PSYMBOL_INFO Symbol );
 
 #endif

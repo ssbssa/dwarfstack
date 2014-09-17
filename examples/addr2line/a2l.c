@@ -13,7 +13,7 @@
 
 
 static void stdoutPrint(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     int *context )
 {
   int addrSize = addr>0xffffffff ? 16 : 8;
@@ -30,8 +30,11 @@ static void stdoutPrint(
       break;
 
     default:
-      printf( "    stack %02d: 0x%0*I64X (%s:%d)\n",
+      printf( "    stack %02d: 0x%0*I64X (%s:%d)",
           (*context)++,addrSize,addr,filename,lineno );
+      if( funcname )
+        printf( " [%s]",funcname );
+      printf( "\n" );
       break;
   }
 }

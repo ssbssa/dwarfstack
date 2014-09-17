@@ -11,7 +11,7 @@
 
 
 static void stderrPrint(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     int *context )
 {
   const char *delim = strrchr( filename,'/' );
@@ -35,8 +35,11 @@ static void stderrPrint(
       break;
 
     default:
-      fprintf( stderr,"    stack %02d: 0x%p (%s:%d)\n",
+      fprintf( stderr,"    stack %02d: 0x%p (%s:%d)",
           (*context)++,ptr,filename,lineno );
+      if( funcname )
+        fprintf( stderr," [%s]",funcname );
+      fprintf( stderr,"\n" );
       break;
   }
 }

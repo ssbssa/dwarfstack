@@ -22,6 +22,7 @@
 #include "dwarf_pe.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 
 typedef void ChildWalker( Dwarf_Debug dbg,Dwarf_Die die,void *context );
@@ -91,6 +92,93 @@ static int dwarf_lowhighpc( Dwarf_Die die,
   return( res );
 }
 
+// get DIE by reference attribute
+static int dwarf_die_by_ref( Dwarf_Debug dbg,Dwarf_Die die,
+    Dwarf_Half attr,Dwarf_Die *return_die )
+{
+  Dwarf_Attribute ref_attr;
+  int res = dwarf_attr( die,attr,&ref_attr,NULL );
+  if( res!=DW_DLV_OK ) return( res );
+
+  Dwarf_Off ref_off;
+  res = dwarf_global_formref( ref_attr,&ref_off,NULL );
+  if( res==DW_DLV_OK )
+    res = dwarf_offdie( dbg,ref_off,return_die,NULL );
+
+  dwarf_dealloc( dbg,ref_attr,DW_DLA_ATTR );
+
+  return( res );
+}
+
+#ifdef DWST_SHARED
+char *__cxa_demangle( const char*,char*,size_t*,int* );
+Dwarf_Ptr _dwarf_get_alloc( Dwarf_Debug,Dwarf_Small,Dwarf_Unsigned );
+#endif
+
+// get function name of specified DIE
+static int dwarf_name_of_func( Dwarf_Debug UNUSED(dbg),Dwarf_Die die,
+    char **funcname )
+{
+  *funcname = NULL;
+  char *local_funcname;
+  int res;
+
+#ifdef DWST_SHARED
+  Dwarf_Attribute linkage_attr;
+  if( dwarf_attr(die,DW_AT_linkage_name,&linkage_attr,NULL)==DW_DLV_OK ||
+      dwarf_attr(die,DW_AT_MIPS_linkage_name,&linkage_attr,NULL)==DW_DLV_OK )
+  {
+    res = dwarf_formstring( linkage_attr,&local_funcname,NULL );
+
+    dwarf_dealloc( dbg,linkage_attr,DW_DLA_ATTR );
+
+    if( res==DW_DLV_OK )
+    {
+      char *demangled = __cxa_demangle( local_funcname,NULL,NULL,NULL );
+
+      dwarf_dealloc( dbg,local_funcname,DW_DLA_STRING );
+
+      if( demangled )
+      {
+        *funcname = _dwarf_get_alloc( dbg,DW_DLA_STRING,strlen(demangled)+1 );
+        if( *funcname )
+          strcpy( *funcname,demangled );
+
+        free( demangled );
+
+        if( *funcname )
+          return( DW_DLV_OK );
+      }
+    }
+  }
+#endif
+
+  res = dwarf_diename( die,&local_funcname,NULL );
+  if( res!=DW_DLV_OK ) return( res );
+
+  *funcname = local_funcname;
+
+  return( DW_DLV_OK );
+}
+
+static char *dwarf_name_of_func_linked( Dwarf_Debug dbg,Dwarf_Die die )
+{
+  char *funcname = NULL;
+  if( dwarf_name_of_func(dbg,die,&funcname)==DW_DLV_OK )
+    return( funcname );
+
+  Dwarf_Die link;
+  if( dwarf_die_by_ref(dbg,die,DW_AT_abstract_origin,&link)==DW_DLV_OK ||
+      dwarf_die_by_ref(dbg,die,DW_AT_specification,&link)==DW_DLV_OK )
+  {
+    funcname = dwarf_name_of_func_linked( dbg,link );
+
+    dwarf_dealloc( dbg,link,DW_DLA_DIE );
+  }
+
+  return( funcname );
+}
+
 
 typedef struct inline_info
 {
@@ -100,6 +188,7 @@ typedef struct inline_info
   dwstCallback *callbackFunc;
   void *callbackContext;
   int64_t baseOffs;
+  int fileno,lineno;
 } inline_info;
 
 // find the calling-location of inlined functions
@@ -107,7 +196,8 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 {
   Dwarf_Half tag;
   if( dwarf_tag(die,&tag,NULL)!=DW_DLV_OK ||
-      tag!=DW_TAG_inlined_subroutine )
+      (tag!=DW_TAG_inlined_subroutine &&
+       tag!=DW_TAG_subprogram) )
     return;
 
   Dwarf_Addr low,high;
@@ -155,6 +245,19 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     if( i>=rangeCount ) return;
   }
 
+  if( tag==DW_TAG_subprogram )
+  {
+    char *funcname = dwarf_name_of_func_linked( dbg,die );
+
+    cuInfo->callbackFunc( cuInfo->ptr-cuInfo->baseOffs,
+        cuInfo->files[cuInfo->fileno-1],cuInfo->lineno,funcname,
+        cuInfo->callbackContext );
+
+    if( funcname )
+      dwarf_dealloc( dbg,funcname,DW_DLA_STRING );
+    return;
+  }
+
   Dwarf_Attribute callfile;
   if( dwarf_attr(die,DW_AT_call_file,&callfile,NULL)!=DW_DLV_OK )
     return;
@@ -168,11 +271,20 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
   Dwarf_Unsigned fileno,lineno;
   if( dwarf_formudata(callfile,&fileno,NULL)==DW_DLV_OK &&
-      dwarf_formudata(callline,&lineno,NULL)==DW_DLV_OK )
+      dwarf_formudata(callline,&lineno,NULL)==DW_DLV_OK &&
+      (int)fileno<=cuInfo->fileCount )
   {
-    if( (int)fileno<=cuInfo->fileCount )
-      cuInfo->callbackFunc( cuInfo->ptr-cuInfo->baseOffs,
-          cuInfo->files[fileno-1],lineno,cuInfo->callbackContext );
+    char *funcname = dwarf_name_of_func_linked( dbg,die );
+
+    cuInfo->callbackFunc( cuInfo->ptr-cuInfo->baseOffs,
+        cuInfo->files[cuInfo->fileno-1],cuInfo->lineno,funcname,
+        cuInfo->callbackContext );
+
+    cuInfo->fileno = fileno;
+    cuInfo->lineno = lineno;
+
+    if( funcname )
+      dwarf_dealloc( dbg,funcname,DW_DLA_STRING );
   }
 
   dwarf_dealloc( dbg,callfile,DW_DLA_ATTR );
@@ -194,7 +306,7 @@ int dwstOfFile(
   if( !name || !addr || !count || !callbackFunc ) return( 0 );
 
   if( imageBase )
-    callbackFunc( imageBase,name,DWST_BASE_ADDR,callbackContext );
+    callbackFunc( imageBase,name,DWST_BASE_ADDR,NULL,callbackContext );
 
   Dwarf_Addr imageBase_dbg;
   Dwarf_Debug dbg;
@@ -202,7 +314,7 @@ int dwstOfFile(
   {
     int i;
     for( i=0; i<count; i++ )
-      callbackFunc( addr[i],name,DWST_NO_DBG_SYM,callbackContext );
+      callbackFunc( addr[i],name,DWST_NO_DBG_SYM,NULL,callbackContext );
 
     return( count );
   }
@@ -347,15 +459,15 @@ int dwstOfFile(
           found_ptr = 1;
 
           if( srcfileno<=(Dwarf_Unsigned)fileCount )
-            callbackFunc( ptrOrig,
-                files[srcfileno-1],lineno,callbackContext );
+          {
+            inline_info ii = { ptr,cuInfo->low,
+              files,fileCount,callbackFunc,callbackContext,baseOffs,
+              srcfileno,lineno };
+            walkChilds( dbg,die,(ChildWalker*)findInlined,&ii );
+          }
           else
             callbackFunc( ptrOrig,
-                name,DWST_NO_SRC_FILE,callbackContext );
-
-          inline_info ii = { ptr,cuInfo->low,
-            files,fileCount,callbackFunc,callbackContext,baseOffs };
-          walkChilds( dbg,die,(ChildWalker*)findInlined,&ii );
+                name,DWST_NO_SRC_FILE,NULL,callbackContext );
 
           int fc;
           for( fc=0; fc<fileCount; fc++ )
@@ -372,7 +484,7 @@ int dwstOfFile(
 
     if( !found_ptr )
       callbackFunc( ptrOrig,
-          name,DWST_NOT_FOUND,callbackContext );
+          name,DWST_NOT_FOUND,NULL,callbackContext );
   }
 
   free( cuArr );

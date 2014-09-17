@@ -111,7 +111,7 @@ static CRITICAL_SECTION allocMutex;
 #endif
 
 typedef void dwstCallback(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     void *context );
 typedef int dwstOfProcess_func(
     uint64_t *addr,int count,
@@ -124,13 +124,18 @@ static HMODULE dwstMod = NULL;
 static dwstOfProcess_func *dwstOfProcess = NULL;
 
 static void output_func(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     void *UNUSED(context) )
 {
   if( lineno<0 )
     fprintf( stderr,"   0x%p: %s\n",(void*)(uintptr_t)addr,filename );
   else if( lineno )
-    fprintf( stderr,"   0x%p: %s:%d\n",(void*)(uintptr_t)addr,filename,lineno );
+  {
+    fprintf( stderr,"   0x%p: %s:%d",(void*)(uintptr_t)addr,filename,lineno );
+    if( funcname )
+      fprintf( stderr," [%s]",funcname );
+    fprintf( stderr,"\n" );
+  }
 }
 #endif
 

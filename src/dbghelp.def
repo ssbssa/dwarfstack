@@ -16,3 +16,5 @@ SymInitialize@12 @70
 SymInitialize @70
 SymSetOptions@4 @81
 SymSetOptions @81
+SymFromAddr@20 @39
+SymFromAddr @39

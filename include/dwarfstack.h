@@ -36,9 +36,10 @@
 //   addr:              stack address
 //   filename:          source file location
 //   lineno:            line number
+//   funcname:          function name
 //   context:           user-provided pointer (callbackContext)
 typedef void dwstCallback(
-    uint64_t addr,const char *filename,int lineno,
+    uint64_t addr,const char *filename,int lineno,const char *funcname,
     void *context );
 
 // special values for lineno:
