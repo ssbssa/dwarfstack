@@ -93,7 +93,7 @@
 #define HAVE_UNISTD_H 1
 
 /* Define 1 if want to allow Windows full path detection */
-/* #undef HAVE_WINDOWS_PATH */
+#define HAVE_WINDOWS_PATH 1
 
 /* See if __uint32_t is predefined in the compiler. */
 /* #undef HAVE___UINT32_T */

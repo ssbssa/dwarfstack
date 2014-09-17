@@ -268,24 +268,21 @@ dwarf_srcfiles(Dwarf_Die die,
             /*  This is not careful to avoid // in the output, Nothing
                 forces a 'canonical' name format here. Unclear if this
                 needs to be fixed. */
+            strcpy(full_name, dir_name);
+            strcat(full_name, "/");
+            strcat(full_name, file_name);
+
 #if defined (HAVE_WINDOWS_PATH)
             /*  Always '/' instead of '\\', this is a Windows -> Unix
                 issue. */
             {
-                int index = 0;
-                int len = strlen(dir_name);
-                for (index = 0; index < len; ++index) {
-                    full_name[index] = dir_name[index];
-                    if (full_name[index] == '\\') {
-                        full_name[index] = '/';
-                    }
+                char *delim = full_name;
+                while ((delim = strchr(delim, '\\'))) {
+                    *delim = '/';
+                    delim++;
                 }
             }
-#else
-            strcpy(full_name, dir_name);
-#endif /* HAVE_WINDOWS_PATH */
-            strcat(full_name, "/");
-            strcat(full_name, file_name);
+#endif
         }
         curr_chain =
             (Dwarf_Chain) _dwarf_get_alloc(dbg, DW_DLA_CHAIN, 1);
