@@ -255,10 +255,15 @@ dwarf_srcfiles(Dwarf_Die die,
             */
             full_name = file_name;
         } else {
+            size_t full_len = strlen(dir_name) + 1 + strlen(file_name) + 1;
+            Dwarf_Bool need_comp_dir = false;
+            if (comp_dir && dir_name != (char *) comp_dir &&
+                !file_name_is_full_path((Dwarf_Small *) dir_name)) {
+                need_comp_dir = true;
+                full_len += strlen((char *) comp_dir) + 1;
+            }
             full_name = (char *) _dwarf_get_alloc(dbg, DW_DLA_STRING,
-                strlen(dir_name) + 1 +
-                strlen(file_name) +
-                1);
+                full_len);
             if (full_name == NULL) {
                 dwarf_free_line_table_prefix(&line_prefix);
                 _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
@@ -268,7 +273,11 @@ dwarf_srcfiles(Dwarf_Die die,
             /*  This is not careful to avoid // in the output, Nothing
                 forces a 'canonical' name format here. Unclear if this
                 needs to be fixed. */
-            strcpy(full_name, dir_name);
+            if (need_comp_dir) {
+                strcpy(full_name, (char *) comp_dir);
+                strcat(full_name, "/");
+            }
+            strcat(full_name, dir_name);
             strcat(full_name, "/");
             strcat(full_name, file_name);
 
