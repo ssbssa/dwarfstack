@@ -26,15 +26,6 @@
   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
   USA.
 
-  Contact information:  Silicon Graphics, Inc., 1500 Crittenden Lane,
-  Mountain View, CA 94043, or:
-
-  http://www.sgi.com
-
-  For further information regarding this notice, see:
-
-  http://oss.sgi.com/projects/GenInfo/NoticeExplan
-
 */
 
 #include "config.h"
@@ -541,6 +532,39 @@ enter_section_in_de_debug_sections_array(Dwarf_Debug dbg,
         }
         return DW_DLV_OK;
     }
+    if(!strcmp(scn_name,".gdb_index")) {
+        /* gdb added this. */
+        sectionerr = add_debug_section_info(dbg,".gdb_index",
+            &dbg->de_debug_gdbindex,
+            DW_DLE_DUPLICATE_GDB_INDEX,0,
+            FALSE,err);
+        if (sectionerr != DW_DLV_OK) {
+            return sectionerr;
+        }
+        return DW_DLV_OK;
+    }
+    if(!strcmp(scn_name,".debug_cu_index")) {
+        /* gdb added this. */
+        sectionerr = add_debug_section_info(dbg,".debug_cu_index",
+            &dbg->de_debug_cu_index,
+            DW_DLE_DUPLICATE_CU_INDEX,0,
+            FALSE,err);
+        if (sectionerr != DW_DLV_OK) {
+            return sectionerr;
+        }
+        return DW_DLV_OK;
+    }
+    if(!strcmp(scn_name,".debug_tu_index")) {
+        /* gdb added this. */
+        sectionerr = add_debug_section_info(dbg,".debug_tu_index",
+            &dbg->de_debug_tu_index,
+            DW_DLE_DUPLICATE_TU_INDEX,0,
+            FALSE,err);
+        if (sectionerr != DW_DLV_OK) {
+            return sectionerr;
+        }
+        return DW_DLV_OK;
+    }
     return DW_DLV_NO_ENTRY;
 }
 
@@ -581,6 +605,34 @@ is_section_known_already(Dwarf_Debug dbg,
     This does not allow for section-groups in object files,
     for which many .debug_info (and other DWARF) sections may exist.
 */
+
+static int
+this_section_dwarf_relevant(const char *scn_name,int UNUSED(type))
+{
+    /* A small helper function for _dwarf_setup(). */
+    if (strncmp(scn_name, ".debug_", 7)
+        && strcmp(scn_name, ".eh_frame")
+        && strcmp(scn_name, ".symtab")
+        && strcmp(scn_name, ".strtab")
+        && strcmp(scn_name, ".gdb_index")
+        && strncmp(scn_name, ".rela.",6)
+        /*  For an object file with incorrect rela section name,
+            readelf prints correct debug information,
+            as the tool takes the section type instead
+            of the section name. Include the incorrect
+            section name, until this test uses the section type. */
+#ifdef SHT_RELA
+        && type != SHT_RELA
+#endif
+        )  {
+            /*  Other sections should be ignored, they
+                are not relevant for DWARF data. */
+            return FALSE;
+    }
+    /* This is one of ours. */
+    return TRUE;
+}
+
 
 static int
 _dwarf_setup(Dwarf_Debug dbg, Dwarf_Error * error)
@@ -672,20 +724,7 @@ _dwarf_setup(Dwarf_Debug dbg, Dwarf_Error * error)
 
         scn_name = doas.name;
 
-        if (strncmp(scn_name, ".debug_", 7)
-            && strcmp(scn_name, ".eh_frame")
-            && strcmp(scn_name, ".symtab")
-            && strcmp(scn_name, ".strtab")
-            && strncmp(scn_name, ".rela.",6)
-            /*  For an object file with incorrect rela section name,
-                readelf prints correct debug information,
-                as the tool takes the section type instead
-                of the section name. Include the incorrect
-                section name, until this test uses the section type. */
-#ifdef SHT_RELA
-            && doas.type != SHT_RELA
-#endif
-            )  {
+        if (!this_section_dwarf_relevant(scn_name,doas.type) ) {
             continue;
         } else {
             /*  Build up the sections table and the

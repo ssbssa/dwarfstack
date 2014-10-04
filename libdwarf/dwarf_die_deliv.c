@@ -174,6 +174,16 @@ _dwarf_find_offdie_CU_Context(Dwarf_Debug dbg, Dwarf_Off offset,
     Returns NULL on error.  As always, being an
     internal routine, assumes a good dbg.
 
+    The offset argument is global offset, the offset
+    in the section, irrespective of CUs.
+
+    max_cu_local_offset is a local offset in this CU.
+    So zero of this field is immediately following the length
+    field of the CU header. so max_cu_local_offset is
+    identical to the CU length field.
+    max_cu_global_offset is the offset one-past the end
+    of this entire CU.
+
     This function must always set a dwarf error code
     before returning NULL. Always.  */
 static Dwarf_CU_Context
@@ -186,6 +196,8 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
     Dwarf_Unsigned typeoffset = 0;
     Dwarf_Sig8 signaturedata;
     Dwarf_Unsigned types_extra_len = 0;
+    Dwarf_Unsigned max_cu_local_offset =  0;
+    Dwarf_Unsigned max_cu_global_offset =  0;
     Dwarf_Byte_Ptr cu_ptr = 0;
     int local_extension_size = 0;
     int local_length_size = 0;
@@ -216,7 +228,10 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
     cu_context->cc_extension_size = local_extension_size;
 
 
-    cu_context->cc_length = (Dwarf_Word) length;
+    cu_context->cc_length = length;
+    max_cu_local_offset =  length;
+    max_cu_global_offset =  offset + length +
+        local_extension_size + local_length_size;
 
     READ_UNALIGNED(dbg, cu_context->cc_version_stamp, Dwarf_Half,
         cu_ptr, sizeof(Dwarf_Half));
@@ -225,7 +240,7 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
     READ_UNALIGNED(dbg, abbrev_offset, Dwarf_Unsigned,
         cu_ptr, local_length_size);
     cu_ptr += local_length_size;
-    cu_context->cc_abbrev_offset = (Dwarf_Sword) abbrev_offset;
+    cu_context->cc_abbrev_offset = abbrev_offset;
 
     cu_context->cc_address_size = *(Dwarf_Small *) cu_ptr;
     ++cu_ptr;
@@ -242,8 +257,7 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
     }
     if ((length < (CU_VERSION_STAMP_SIZE + local_length_size +
         CU_ADDRESS_SIZE_SIZE + types_extra_len)) ||
-        ((offset + length + local_length_size + local_extension_size) >
-            section_size)) {
+        (max_cu_global_offset > section_size)) {
 
         dwarf_dealloc(dbg, cu_context, DW_DLA_CU_CONTEXT);
         _dwarf_error(dbg, error, DW_DLE_CU_LENGTH_ERROR);
@@ -272,9 +286,7 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
         cu_context->cc_typeoffset = typeoffset;
         cu_context->cc_signature = signaturedata;
         {
-            Dwarf_Unsigned cu_len = length - (local_length_size +
-                local_extension_size);
-            if (typeoffset >= cu_len) {
+            if (typeoffset >= max_cu_local_offset) {
                 dwarf_dealloc(dbg, cu_context, DW_DLA_CU_CONTEXT);
                 _dwarf_error(dbg, error, DW_DLE_DEBUG_TYPEOFFSET_BAD);
                 return (NULL);
@@ -295,10 +307,9 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
         return (NULL);
     }
 
-    cu_context->cc_debug_offset = (Dwarf_Word) offset;
+    cu_context->cc_debug_offset = offset;
 
-    dis->de_last_offset = (Dwarf_Word) (offset + length +
-        local_extension_size + local_length_size);
+    dis->de_last_offset = max_cu_global_offset;
 
     if (dis->de_cu_context_list == NULL) {
         dis->de_cu_context_list = cu_context;
@@ -482,9 +493,11 @@ dwarf_next_cu_header_internal(Dwarf_Debug dbg,
             dis->de_cu_context->cc_extension_size;
     }
 
-    /*  Check that there is room in .debug_info beyond the new offset
-        for at least a new cu header. If not, return 0 to indicate end
-        of debug_info section, and reset de_cu_debug_info_offset to
+    /*  Check that there is room in .debug_info beyond
+        the new offset for at least a new cu header.
+        If not, return -1 (DW_DLV_NO_ENTRY) to indicate end
+        of debug_info section, and reset
+        de_cu_debug_info_offset to
         enable looping back through the cu's. */
     section_size = is_info? dbg->de_debug_info.dss_size:
         dbg->de_debug_types.dss_size;
@@ -1258,3 +1271,33 @@ dwarf_offdie_b(Dwarf_Debug dbg,
     *new_die = die;
     return (DW_DLV_OK);
 }
+
+#ifndef DWST_MODE
+/*  This is useful when printing DIE data.
+    The string pointer returned must not be freed.
+    With non-elf objects it is possible the
+    string returned might be empty or NULL,
+    so callers should be prepared for that kind
+    of return. */
+int
+dwarf_get_die_section_name(Dwarf_Debug dbg,
+    Dwarf_Bool    is_info,
+    const char ** sec_name,
+    Dwarf_Error * error)
+{
+    struct Dwarf_Section_s *sec = 0;
+    if (is_info) {
+        sec = &dbg->de_debug_info;
+    } else {
+        sec = &dbg->de_debug_types;
+    }
+    if (sec->dss_size == 0) {
+        /* We don't have such a  section at all. */
+        return DW_DLV_NO_ENTRY;
+    }
+    *sec_name = sec->dss_name;
+    return DW_DLV_OK;
+}
+#endif
+
+

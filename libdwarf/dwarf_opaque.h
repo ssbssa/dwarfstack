@@ -53,9 +53,9 @@
 
 #include <stddef.h>
 
-/* The 'debug_info' names below are non-zero (non-NULL) only
-   if we are processing a debug_info section. And vice versa
-   for a debug_types section. */
+/*  The 'debug_info' names below are non-zero (non-NULL) only
+    if we are processing a debug_info section. And vice versa
+    for a debug_types section. */
 
 struct Dwarf_Die_s {
     Dwarf_Byte_Ptr di_debug_ptr;
@@ -116,9 +116,10 @@ struct Dwarf_CU_Context_s {
 
         cc_length is the length of the compilation unit excluding
         cc_length_size and cc_extension_size.  */
-    Dwarf_Word cc_length;
+    Dwarf_Unsigned cc_length;
 
     /*  cc_length_size is the size in bytes of an offset.
+        Should probably be renamed cc_offset_size.
         4 for 32bit dwarf, 8 for 64bit dwarf (whether MIPS/IRIX
         64bit dwarf or standard 64bit dwarf using the extension
         mechanism). */
@@ -126,36 +127,52 @@ struct Dwarf_CU_Context_s {
 
     /*  cc_extension_size is zero unless this is standard
         DWARF3 and later 64bit dwarf using the extension mechanism.
-        If it is the DWARF3 and later 64bit dwarf cc_extension
-        size is 4. So for 32bit dwarf and MIPS/IRIX 64bit dwarf
-        cc_extension_size is zero.  */
+        64bit DWARF3 and later: cc_extension_size is 4.
+        64bit DWARF2 MIPS/IRIX: cc_extension_size is zero.
+        32bit DWARF:            cc_extension_size is zero.  */
     Dwarf_Small cc_extension_size;
 
+    /*  cc_version_stamp is the DWARF version number applicable
+        to the  DWARF in this compilation unit. 2,3,4,... */
     Dwarf_Half cc_version_stamp;
-    Dwarf_Word cc_abbrev_offset;
+    /*  cc_abbrev_offset is the section-global offset
+        of the .debug_abbrev section this CU uses. */
+    Dwarf_Unsigned cc_abbrev_offset;
+
+    /*  cc_address_size is the size of an address in this
+        compilation unit. */
     Dwarf_Small cc_address_size;
     /*  cc_debug_offset is the offset in the section
-        of the CU header of this CU.  Dwarf_Word
-        should be large enough.  May be debug_info or debug_types
-        but those are distinct. See cc_is_info flag. */
-    Dwarf_Word cc_debug_offset;
+        of the CU header of this CU.
+        That is, it is a section global offset.
+        May be debug_info or debug_types
+        but those are distinct.
+        See cc_is_info flag. */
+    Dwarf_Unsigned cc_debug_offset;
+
+    /*  cc_signature and cc_typeoffset are in the CU header
+        of a type unit and contain the signature content
+        and the section-global DIE offset of the type
+        the signature applies to. */
     Dwarf_Sig8  cc_signature;
     Dwarf_Unsigned cc_typeoffset;
 
     /*  If the attribute DW_AT_[GNU_]addr_base is present in the
         CU die, its value is in cc_addr_base.
-        cc_addr_bae_present TRUE means cc_addr_base is meaningful, which
+        cc_addr_base_present TRUE means cc_addr_base is meaningful, which
         is a check on the correctness of the DWARF.
         DW_AT_str_offsets_base exists for DW_FORM_strx,
         for GNU a base of zero is apparently fine.
         Fields listed in this order for a tiny space saving.
+        Support for these is incomplete.
     */
     Dwarf_Bool cc_addr_base_present;
     Dwarf_Bool cc_string_base_present;
-    /* refers to cc_cu_die_global_sec_offset */
+    /*  cc_cu_die_offset_present is non-zero if
+        cc_cu_die_global_sec_offset is meaningful.  */
     Dwarf_Bool cc_cu_die_offset_present;
 
-
+    /*  Support for these two fields is incomplete. */
     Dwarf_Unsigned cc_addr_base;
     Dwarf_Unsigned cc_string_base;
 
@@ -257,8 +274,11 @@ struct Dwarf_Debug_InfoTypes_s {
     Dwarf_CU_Context de_offdie_cu_context;
     Dwarf_CU_Context de_offdie_cu_context_end;
 
-    /*  Offset of last byte of last CU read. */
-    Dwarf_Word de_last_offset;
+    /*  Offset of last byte of last CU read.
+        Actually one-past that last byte.  So
+        use care and compare as offset >= de_last_offset
+        to know if offset is too big. */
+    Dwarf_Unsigned de_last_offset;
     /*  de_last_di_info_ptr and de_last_die are used with
         dwarf_siblingof, dwarf_child, and dwarf_validate_die_sibling.
         dwarf_validate_die_sibling will not give meaningful results
@@ -373,6 +393,12 @@ struct Dwarf_Debug_s {
     /*  Following two part of DebugFission. */
     struct Dwarf_Section_s de_debug_str_offsets;
     struct Dwarf_Section_s de_debug_addr;
+
+    /* Following for the .gdb_index section.  */
+    struct Dwarf_Section_s de_debug_gdbindex;
+
+    struct Dwarf_Section_s de_debug_cu_index;
+    struct Dwarf_Section_s de_debug_tu_index;
 
     /*  For non-elf, simply leave the following two structs zeroed and
         they will be ignored. */
