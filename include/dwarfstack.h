@@ -32,6 +32,11 @@
 #endif
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 // dwstCallback(): callback function
 //   addr:              stack address
 //   filename:          source file location
@@ -113,5 +118,10 @@ EXPORT int dwstOfException(
 //      (for example see examples/exception-dialog/)
 EXPORT void dwstExceptionDialog(
     const char *extraInfo );
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
