@@ -134,6 +134,7 @@ static void dlgPrint(
     }
 
     DWORD64 displ2;
+    si->SizeOfStruct = sizeof(SYMBOL_INFO);
     si->MaxNameLen = 100;
     if( SymFromAddr(GetCurrentProcess(),addr,&displ2,si) )
       funcname = si->Name;
