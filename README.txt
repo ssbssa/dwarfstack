@@ -18,6 +18,7 @@ $ make PREFIX=/your/install/path
 
 notes:
 If you need a full stacktrace for release builds, you should consider
-using -fno-omit-frame-pointer (and maybe even -fno-optimize-sibling-calls).
+using -fno-omit-frame-pointer (and maybe even
+-fno-optimize-sibling-calls / -fno-schedule-insns2).
 Otherwise, depending on the situation (like gcc version), some frames
 might be missing.

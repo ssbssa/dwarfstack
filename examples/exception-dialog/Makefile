@@ -1,7 +1,7 @@
 
 CC = gcc
 OPT = -O3
-CFLAGS = $(OPT) -g -Wall -Wextra -I../../include -fno-omit-frame-pointer -fno-optimize-sibling-calls
+CFLAGS = $(OPT) -g -Wall -Wextra -I../../include -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-schedule-insns2
 
 LIBS=../../lib/libdwarfstack.dll.a
 
