@@ -119,7 +119,7 @@ static void dlgPrint(
     struct dialog_info *context )
 {
 #ifndef NO_DBGHELP
-  char buffer[sizeof(SYMBOL_INFO)+100];
+  char buffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME];
   SYMBOL_INFO *si = (SYMBOL_INFO*)&buffer;
   if( lineno==DWST_NO_DBG_SYM )
   {
@@ -135,9 +135,13 @@ static void dlgPrint(
 
     DWORD64 displ2;
     si->SizeOfStruct = sizeof(SYMBOL_INFO);
-    si->MaxNameLen = 100;
+    si->MaxNameLen = MAX_SYM_NAME;
     if( SymFromAddr(GetCurrentProcess(),addr,&displ2,si) )
-      funcname = si->Name;
+    {
+      char *fn = si->Name;
+      fn[MAX_SYM_NAME] = 0;
+      funcname = fn;
+    }
   }
 #endif
 

@@ -6,6 +6,8 @@
 
 #define SYMOPT_LOAD_LINES 0x00000010
 
+#define MAX_SYM_NAME 2000
+
 
 typedef struct _IMAGEHLP_LINE64 {
   DWORD   SizeOfStruct;

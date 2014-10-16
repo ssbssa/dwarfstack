@@ -23,7 +23,9 @@
 #include <windows.h>
 
 
+#ifdef NO_DBGHELP
 int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size );
+#endif
 
 typedef USHORT WINAPI CaptureStackBackTraceFunc( ULONG,ULONG,PVOID*,PULONG );
 
@@ -64,9 +66,14 @@ int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
   else
   {
     // fallback for older systems
+#ifdef NO_DBGHELP
     ULONG_PTR *sp = __builtin_frame_address( 0 );
 
     count = captureStackTrace( sp,frames,MAX_FRAMES );
+#else
+    frames[0] = (uintptr_t)__builtin_return_address( 0 ) - 1;
+    count = 1;
+#endif
   }
 
   return( dwstOfProcess(frames,count,callbackFunc,callbackContext) );

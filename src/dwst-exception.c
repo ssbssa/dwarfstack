@@ -27,6 +27,7 @@
 #endif
 
 
+#ifdef NO_DBGHELP
 int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 {
   int count;
@@ -45,6 +46,7 @@ int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 
   return( count );
 }
+#endif
 
 
 #define MAX_FRAMES 32
@@ -68,8 +70,11 @@ int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 int captureStackWalk( HANDLE process,CONTEXT *context,
     uint64_t *frames,int size )
 {
-  STACKFRAME64 stack;
+  CONTEXT contextCopy;
+  memcpy( &contextCopy,context,sizeof(CONTEXT) );
+  context = &contextCopy;
 
+  STACKFRAME64 stack;
   ZeroMemory( &stack,sizeof(STACKFRAME64) );
   stack.AddrPC.Offset = context->cip;
   stack.AddrPC.Mode = AddrModeFlat;
@@ -114,10 +119,11 @@ int dwstOfException(
   count += captureStackTrace( sp,frames+count,MAX_FRAMES-count );
 #else
   HANDLE process = GetCurrentProcess();
-  count += captureStackWalk( process,contextP,frames+count,MAX_FRAMES-count );
 
   SymSetOptions( SYMOPT_LOAD_LINES );
   SymInitialize( process,NULL,TRUE );
+
+  count += captureStackWalk( process,contextP,frames+count,MAX_FRAMES-count );
 #endif
 
   count = dwstOfProcess( frames,count,callbackFunc,callbackContext );
