@@ -27,7 +27,7 @@
 #include <stdlib.h>
 
 #ifndef NO_DBGHELP
-#include "dbghelp.h"
+#include <dbghelp.h>
 #endif
 
 

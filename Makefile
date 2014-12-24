@@ -50,7 +50,7 @@ DWST_DLL_OBJ = $(patsubst %.c,%.dll.o,$(DWST_SRC))
 
 
 INC = include/dwarfstack.h
-LIB = lib/libdwarfstack.a lib/libdwarfstack.dll.a lib/libdbghelp.a
+LIB = lib/libdwarfstack.a lib/libdwarfstack.dll.a
 BIN = bin/dwarfstack.dll
 BUILD = $(LIB) $(BIN) $(INC)
 
@@ -71,11 +71,8 @@ lib/libdwarfstack.a: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
 .c.dll.o:
 	$(CC) -c $(CFLAGS_SHARED) -o $@ $<
 
-lib/libdbghelp.a: src/dbghelp.def | lib
-	dlltool -k -d $< -l $@
-
-bin/dwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) lib/libdbghelp.a | lib bin
-	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -Llib -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
+bin/dwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
+	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
 
 lib/libdwarfstack.dll.a: bin/dwarfstack.dll
 

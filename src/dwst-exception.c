@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2014 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@
 #include <windows.h>
 
 #ifndef NO_DBGHELP
-#include "dbghelp.h"
+#include <dbghelp.h>
 #endif
 
 
