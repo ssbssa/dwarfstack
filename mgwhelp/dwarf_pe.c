@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Jose Fonseca
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2015 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -136,13 +136,14 @@ pe_methods = {
 };
 
 
-int
-dwarf_pe_init(const char *image,
-              Dwarf_Addr *imagebase,
-              Dwarf_Handler errhand,
-              Dwarf_Ptr errarg,
-              Dwarf_Debug *ret_dbg,
-              Dwarf_Error *error)
+static int
+dwarf_pe_init_link(const char *image,
+                   Dwarf_Addr *imagebase,
+                   Dwarf_Handler errhand,
+                   Dwarf_Ptr errarg,
+                   Dwarf_Debug *ret_dbg,
+                   Dwarf_Error *error,
+                   char *link_path)
 {
     int res = 0;
     pe_access_object_t *pe_obj = 0;
@@ -218,6 +219,24 @@ dwarf_pe_init(const char *image,
 
     res = dwarf_object_init(intfc, errhand, errarg, ret_dbg, error);
     if (res != DW_DLV_OK) {
+        Dwarf_Unsigned num_sections = pe_obj->pNtHeaders->FileHeader.NumberOfSections;
+        Dwarf_Obj_Access_Section section;
+        char *link;
+        if (link_path
+                && num_sections > 0
+                && pe_get_section_info(pe_obj, num_sections, &section, NULL) == DW_DLV_OK
+                && !strcmp(section.name, ".gnu_debuglink")
+                && pe_load_section(pe_obj, num_sections, (Dwarf_Small **)&link, NULL) == DW_DLV_OK
+                && link && link[0]) {
+            strcpy(link_path, image);
+            char *delim1 = strrchr(link_path, '/');
+            char *delim2 = strrchr(link_path, '\\');
+            if (delim2 > delim1) delim1 = delim2;
+            if (delim1) delim1++;
+            else delim1 = link_path;
+            strcpy(delim1, link);
+        }
+
         goto no_dbg;
     }
 
@@ -235,6 +254,24 @@ no_file:
     free(pe_obj);
 no_internals:
     return DW_DLV_ERROR;
+}
+
+
+int
+dwarf_pe_init(const char *image,
+              Dwarf_Addr *imagebase,
+              Dwarf_Handler errhand,
+              Dwarf_Ptr errarg,
+              Dwarf_Debug *ret_dbg,
+              Dwarf_Error *error)
+{
+    char link_path[MAX_PATH];
+
+    link_path[0] = 0;
+    int res = dwarf_pe_init_link(image, imagebase, errhand, errarg, ret_dbg, error, link_path);
+    if (res == DW_DLV_OK || !link_path[0]) return res;
+
+    return dwarf_pe_init_link(link_path, imagebase, errhand, errarg, ret_dbg, error, NULL);
 }
 
 
