@@ -77,17 +77,27 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
 {
   TCHAR hexNum[20];
 
-  Edit_ReplaceSel( hwnd,beg );
-
-  if( num>=0 )
+  if( ptr )
   {
-    _stprintf( hexNum,TEXT("%02d"),num );
+    Edit_ReplaceSel( hwnd,beg );
+
+    if( num>=0 )
+    {
+      _stprintf( hexNum,TEXT("%02d"),num );
+      Edit_ReplaceSel( hwnd,hexNum );
+    }
+
+    Edit_ReplaceSel( hwnd,TEXT(": 0x") );
+    _stprintf( hexNum,TEXT("%p"),ptr );
     Edit_ReplaceSel( hwnd,hexNum );
   }
-
-  Edit_ReplaceSel( hwnd,TEXT(": 0x") );
-  _stprintf( hexNum,TEXT("%p"),ptr );
-  Edit_ReplaceSel( hwnd,hexNum );
+  else
+  {
+    _stprintf( hexNum,TEXT("%*s"),14,TEXT("") );
+    Edit_ReplaceSel( hwnd,hexNum );
+    _stprintf( hexNum,TEXT("%*s"),2+(int)sizeof(void*)*2,TEXT("") );
+    Edit_ReplaceSel( hwnd,hexNum );
+  }
 
   if( posFile )
   {
@@ -169,8 +179,9 @@ static void dlgPrint(
       break;
 
     default:
-      printAddr( context->hwnd,TEXT("    stack "),context->count++,
+      printAddr( context->hwnd,TEXT("    stack "),context->count,
           ptr,filename,lineno,funcname );
+      if( ptr ) context->count++;
       break;
   }
 }

@@ -12,11 +12,14 @@
 #include <string.h>
 
 
+static uint64_t prevAddr = 0;
+
 static void stdoutPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
     int *context )
 {
-  int addrSize = addr>0xffffffff ? 16 : 8;
+  uint64_t tAddr = addr ? addr : prevAddr;
+  int addrSize = tAddr>0xffffffff ? 16 : 8;
   switch( lineno )
   {
     case DWST_BASE_ADDR:
@@ -30,8 +33,12 @@ static void stdoutPrint(
       break;
 
     default:
-      printf( "    stack %02d: 0x%0*I64X (%s:%d)",
-          (*context)++,addrSize,addr,filename,lineno );
+      if( addr )
+        printf( "    stack %02d: 0x%0*I64X (%s:%d)",
+            (*context)++,addrSize,addr,filename,lineno );
+      else
+        printf( "                %*s (%s:%d)",
+            addrSize,"",filename,lineno );
       if( funcname )
         printf( " [%s]",funcname );
       printf( "\n" );

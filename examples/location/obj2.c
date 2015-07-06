@@ -39,8 +39,12 @@ static void stdoutPrint(
       break;
 
     default:
-      printf( "    stack %02d: 0x%p (%s:%d)",
-          (*context)++,ptr,filename,lineno );
+      if( ptr )
+        printf( "    stack %02d: 0x%p (%s:%d)",
+            (*context)++,ptr,filename,lineno );
+      else
+        printf( "                %*s (%s:%d)",
+            (int)sizeof(void*)*2,"",filename,lineno );
       if( funcname )
         printf( " [%s]",funcname );
       printf( "\n" );

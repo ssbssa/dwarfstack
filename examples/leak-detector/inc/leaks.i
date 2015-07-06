@@ -131,7 +131,12 @@ static void output_func(
     fprintf( stderr,"   0x%p: %s\n",(void*)(uintptr_t)addr,filename );
   else if( lineno )
   {
-    fprintf( stderr,"   0x%p: %s:%d",(void*)(uintptr_t)addr,filename,lineno );
+    if( addr )
+      fprintf( stderr,"   0x%p: %s:%d",
+          (void*)(uintptr_t)addr,filename,lineno );
+    else
+      fprintf( stderr,"     %*s  %s:%d",
+          (int)sizeof(void*)*2,"",filename,lineno );
     if( funcname )
       fprintf( stderr," [%s]",funcname );
     fprintf( stderr,"\n" );

@@ -35,8 +35,12 @@ static void stderrPrint(
       break;
 
     default:
-      fprintf( stderr,"    stack %02d: 0x%p (%s:%d)",
-          (*context)++,ptr,filename,lineno );
+      if( ptr )
+        fprintf( stderr,"    stack %02d: 0x%p (%s:%d)",
+            (*context)++,ptr,filename,lineno );
+      else
+        fprintf( stderr,"                %*s (%s:%d)",
+            (int)sizeof(void*)*2,"",filename,lineno );
       if( funcname )
         fprintf( stderr," [%s]",funcname );
       fprintf( stderr,"\n" );
