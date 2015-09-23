@@ -81,15 +81,6 @@ pe_get_byte_order(void *UNUSED(obj))
 
 
 static Dwarf_Small
-pe_get_length_size(void *obj)
-{
-    pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
-    PIMAGE_FILE_HEADER pFileHeader = &pe_obj->pNtHeaders->FileHeader;
-    return pFileHeader->Machine == IMAGE_FILE_MACHINE_I386 ? 4 : 8;
-}
-
-
-static Dwarf_Small
 pe_get_pointer_size(void *obj)
 {
     pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
@@ -128,7 +119,7 @@ static const Dwarf_Obj_Access_Methods
 pe_methods = {
     pe_get_section_info,
     pe_get_byte_order,
-    pe_get_length_size,
+    pe_get_pointer_size,
     pe_get_pointer_size,
     pe_get_section_count,
     pe_load_section,
