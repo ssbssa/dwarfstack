@@ -320,7 +320,7 @@ int dwstOfFile(
     return( count );
   }
 
-  int64_t baseOffs = 0;
+  uint64_t baseOffs = 0;
   if( imageBase && imageBase_dbg )
     baseOffs = imageBase_dbg - imageBase;
 
