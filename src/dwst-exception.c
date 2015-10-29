@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Hannes Domani
+ * Copyright (C) 2013-2015 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@
 
 
 #ifdef NO_DBGHELP
-int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
+int captureStackTrace( ULONG_PTR *frameAddr,uintptr_t *frames,int size )
 {
   int count;
   ULONG_PTR *sp = frameAddr;
@@ -68,7 +68,7 @@ int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size )
 
 #ifndef NO_DBGHELP
 int captureStackWalk( HANDLE process,CONTEXT *context,
-    uint64_t *frames,int size )
+    uintptr_t *frames,int size )
 {
   CONTEXT contextCopy;
   memcpy( &contextCopy,context,sizeof(CONTEXT) );
@@ -89,7 +89,7 @@ int captureStackWalk( HANDLE process,CONTEXT *context,
         NULL,SymFunctionTableAccess64,SymGetModuleBase64,NULL) &&
       count<size )
   {
-    uint64_t frame = stack.AddrPC.Offset;
+    uintptr_t frame = stack.AddrPC.Offset;
     if( !frame ) break;
 
     if( count ) frame--;
@@ -104,7 +104,7 @@ int dwstOfException(
     void *context,
     dwstCallback *callbackFunc,void *callbackContext )
 {
-  uint64_t frames[MAX_FRAMES];
+  uintptr_t frames[MAX_FRAMES];
   int count = 0;
   CONTEXT *contextP = (CONTEXT*)context;
 

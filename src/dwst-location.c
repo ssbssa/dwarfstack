@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2015 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@
 
 
 #ifdef NO_DBGHELP
-int captureStackTrace( ULONG_PTR *frameAddr,uint64_t *frames,int size );
+int captureStackTrace( ULONG_PTR *frameAddr,uintptr_t *frames,int size );
 #endif
 
 typedef USHORT WINAPI CaptureStackBackTraceFunc( ULONG,ULONG,PVOID*,PULONG );
@@ -34,7 +34,7 @@ typedef USHORT WINAPI CaptureStackBackTraceFunc( ULONG,ULONG,PVOID*,PULONG );
 
 int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
 {
-  uint64_t frames[MAX_FRAMES];
+  uintptr_t frames[MAX_FRAMES];
 
   int count;
   HANDLE kernel32 = GetModuleHandle( "kernel32.dll" );
@@ -44,24 +44,11 @@ int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
         kernel32,"RtlCaptureStackBackTrace" );
   if( CaptureStackBackTrace )
   {
-#ifndef _WIN64
-    uintptr_t frames32[MAX_FRAMES];
-    PVOID *framesPtr = (PVOID*)frames32;
-#else
-    PVOID *framesPtr = (PVOID*)frames;
-#endif
-
-    count = CaptureStackBackTrace( 1,MAX_FRAMES,framesPtr,NULL );
+    count = CaptureStackBackTrace( 1,MAX_FRAMES,(PVOID*)frames,NULL );
 
     int i;
     for( i=0; i<count; i++ )
-    {
-#ifndef _WIN64
-      frames[i] = frames32[i] - 1;
-#else
       frames[i]--;
-#endif
-    }
   }
   else
   {

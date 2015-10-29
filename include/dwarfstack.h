@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2015 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -91,7 +91,7 @@ EXPORT int dwstOfFile(
 //   callbackFunc:      callback function
 //   callbackContext:   user-provided pointer (context)
 EXPORT int dwstOfProcess(
-    uint64_t *addr,int count,
+    uintptr_t *addr,int count,
     dwstCallback *callbackFunc,void *callbackContext );
 
 

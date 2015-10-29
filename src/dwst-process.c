@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2015 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@
 
 
 int dwstOfProcess(
-    uint64_t *addr,int count,
+    uintptr_t *addr,int count,
     dwstCallback *callbackFunc,void *callbackContext )
 {
   if( !addr || !count || !callbackFunc ) return( 0 );
@@ -35,9 +35,9 @@ int dwstOfProcess(
   int converted = 0;
   for( s=0; s<count; s++ )
   {
-    uint64_t ptr = addr[s];
+    uintptr_t ptr = addr[s];
 
-    if( !VirtualQuery((void*)(uintptr_t)ptr,
+    if( !VirtualQuery((void*)ptr,
           &mbi,sizeof(MEMORY_BASIC_INFORMATION)) ||
         mbi.State!=MEM_COMMIT ||
         !(mbi.Protect&(PAGE_EXECUTE|PAGE_EXECUTE_READ)) ||
@@ -53,14 +53,24 @@ int dwstOfProcess(
     {
       ptr = addr[s+c];
 
-      if( !VirtualQuery((void*)(uintptr_t)ptr,
+      if( !VirtualQuery((void*)ptr,
             &mbi,sizeof(MEMORY_BASIC_INFORMATION)) ||
           mbi.AllocationBase!=base )
         break;
     }
 
+#ifndef _WIN64
+    uint64_t addr64[c];
+    int c64;
+    for( c64=0; c64<c; c64++ )
+      addr64[c64] = addr[s+c64];
+    uint64_t *addrPos = addr64;
+#else
+    uint64_t *addrPos = addr + s;
+#endif
+
     converted += dwstOfFile(
-        name,(uintptr_t)base,addr+s,c,callbackFunc,callbackContext );
+        name,(uintptr_t)base,addrPos,c,callbackFunc,callbackContext );
     s += c - 1;
   }
 
