@@ -162,10 +162,16 @@ dwarf_pe_init_link(const char *image,
         goto no_view_of_file;
     }
 
+    if (pe_obj->pDosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+        goto no_intfc;
+    }
     pe_obj->pNtHeaders = (PIMAGE_NT_HEADERS) (
         pe_obj->lpFileBase +
         pe_obj->pDosHeader->e_lfanew
     );
+    if (pe_obj->pNtHeaders->Signature != IMAGE_NT_SIGNATURE) {
+        goto no_intfc;
+    }
     pe_obj->Sections = (PIMAGE_SECTION_HEADER) (
         (PBYTE)pe_obj->pNtHeaders +
         sizeof(DWORD) +
