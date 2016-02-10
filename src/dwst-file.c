@@ -310,8 +310,9 @@ int dwstOfFile(
     callbackFunc( imageBase,name,DWST_BASE_ADDR,NULL,callbackContext );
 
   Dwarf_Addr imageBase_dbg;
+  Dwarf_Off baseOfCode;
   Dwarf_Debug dbg;
-  if( dwarf_pe_init(name,&imageBase_dbg,0,0,&dbg,NULL)!=DW_DLV_OK )
+  if( dwarf_pe_init(name,&imageBase_dbg,&baseOfCode,0,0,&dbg,NULL)!=DW_DLV_OK )
   {
     int i;
     for( i=0; i<count; i++ )
@@ -320,12 +321,9 @@ int dwstOfFile(
     return( count );
   }
 
-  uint64_t baseOffs = 0;
-  if( imageBase && imageBase_dbg )
-    baseOffs = imageBase_dbg - imageBase;
-
   cu_info *cuArr = NULL;
   int cuQty = 0;
+  Dwarf_Addr lowestLow = 0;
   while( 1 )
   {
     Dwarf_Unsigned next_cu_header;
@@ -354,6 +352,9 @@ int dwstOfFile(
       cuInfo->offs = 0;
 
     int res = dwarf_lowhighpc( die,&cuInfo->low,&cuInfo->high );
+    if( res==DW_DLV_OK && cuInfo->low &&
+        (!lowestLow || cuInfo->low<lowestLow) )
+      lowestLow = cuInfo->low;
     if( res!=DW_DLV_OK || !cuInfo->high )
     {
       int hasLow = res==DW_DLV_OK;
@@ -401,6 +402,15 @@ int dwstOfFile(
     }
 
     dwarf_dealloc( dbg,die,DW_DLA_DIE );
+  }
+
+  uint64_t baseOffs = 0;
+  if( imageBase )
+  {
+    if( baseOfCode && lowestLow>baseOfCode )
+      baseOffs = ( lowestLow - baseOfCode ) - imageBase;
+    else if( imageBase_dbg )
+      baseOffs = imageBase_dbg - imageBase;
   }
 
   int i,j;

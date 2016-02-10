@@ -130,6 +130,7 @@ pe_methods = {
 static int
 dwarf_pe_init_link(const char *image,
                    Dwarf_Addr *imagebase,
+                   Dwarf_Off *baseofcode,
                    Dwarf_Handler errhand,
                    Dwarf_Ptr errarg,
                    Dwarf_Debug *ret_dbg,
@@ -185,24 +186,27 @@ dwarf_pe_init_link(const char *image,
     pe_obj->pStringTable = (PSTR)
         &pe_obj->pSymbolTable[pe_obj->pNtHeaders->FileHeader.NumberOfSymbols];
 
-    if (imagebase) {
+    if (imagebase || baseofcode) {
         WORD sooh = pe_obj->pNtHeaders->FileHeader.SizeOfOptionalHeader;
         if (sooh==sizeof(IMAGE_OPTIONAL_HEADER32)) {
             PIMAGE_OPTIONAL_HEADER32 opt = (PIMAGE_OPTIONAL_HEADER32)(
                     (PBYTE)pe_obj->pNtHeaders +
                     sizeof(DWORD) +
                     sizeof(IMAGE_FILE_HEADER) );
-            *imagebase = opt->ImageBase;
+            if (imagebase) *imagebase = opt->ImageBase;
+            if (baseofcode) *baseofcode = opt->BaseOfCode;
         }
         else if (sooh==sizeof(IMAGE_OPTIONAL_HEADER64)) {
             PIMAGE_OPTIONAL_HEADER64 opt = (PIMAGE_OPTIONAL_HEADER64)(
                     (PBYTE)pe_obj->pNtHeaders +
                     sizeof(DWORD) +
                     sizeof(IMAGE_FILE_HEADER) );
-            *imagebase = opt->ImageBase;
+            if (imagebase) *imagebase = opt->ImageBase;
+            if (baseofcode) *baseofcode = opt->BaseOfCode;
         }
         else {
-            *imagebase = 0;
+            if (imagebase) *imagebase = 0;
+            if (baseofcode) *baseofcode = 0;
         }
     }
 
@@ -257,6 +261,7 @@ no_internals:
 int
 dwarf_pe_init(const char *image,
               Dwarf_Addr *imagebase,
+              Dwarf_Off *baseofcode,
               Dwarf_Handler errhand,
               Dwarf_Ptr errarg,
               Dwarf_Debug *ret_dbg,
@@ -265,10 +270,10 @@ dwarf_pe_init(const char *image,
     char link_path[MAX_PATH];
 
     link_path[0] = 0;
-    int res = dwarf_pe_init_link(image, imagebase, errhand, errarg, ret_dbg, error, link_path);
+    int res = dwarf_pe_init_link(image, imagebase, baseofcode, errhand, errarg, ret_dbg, error, link_path);
     if (res == DW_DLV_OK || !link_path[0]) return res;
 
-    return dwarf_pe_init_link(link_path, imagebase, errhand, errarg, ret_dbg, error, NULL);
+    return dwarf_pe_init_link(link_path, imagebase, baseofcode, errhand, errarg, ret_dbg, error, NULL);
 }
 
 
