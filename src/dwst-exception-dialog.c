@@ -126,8 +126,9 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
 
 static void dlgPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    struct dialog_info *context )
+    void *context )
 {
+  struct dialog_info *di = context;
 #ifndef NO_DBGHELP
   char buffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME];
   SYMBOL_INFO *si = (SYMBOL_INFO*)&buffer;
@@ -164,24 +165,24 @@ static void dlgPrint(
   switch( lineno )
   {
     case DWST_BASE_ADDR:
-      if( ptr==context->lastBase ) break;
-      context->lastBase = ptr;
+      if( ptr==di->lastBase ) break;
+      di->lastBase = ptr;
 
-      printAddr( context->hwnd,TEXT("base address"),-1,
+      printAddr( di->hwnd,TEXT("base address"),-1,
           ptr,filename,0,NULL );
       break;
 
     case DWST_NOT_FOUND:
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
-      printAddr( context->hwnd,TEXT("    stack "),context->count++,
+      printAddr( di->hwnd,TEXT("    stack "),di->count++,
           ptr,NULL,0,funcname );
       break;
 
     default:
-      printAddr( context->hwnd,TEXT("    stack "),context->count,
+      printAddr( di->hwnd,TEXT("    stack "),di->count,
           ptr,filename,lineno,funcname );
-      if( ptr ) context->count++;
+      if( ptr ) di->count++;
       break;
   }
 }
@@ -309,8 +310,7 @@ static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
   Edit_ReplaceSel( textHwnd,TEXT("\r\n") );
 
   struct dialog_info di = { 0,textHwnd,NULL };
-  dwstOfException(
-      ep->ContextRecord,(dwstCallback*)&dlgPrint,&di );
+  dwstOfException( ep->ContextRecord,&dlgPrint,&di );
 
   SendMessage( hwnd,WM_NEXTDLGCTL,(WPARAM)textHwnd,TRUE );
   Edit_SetSel( textHwnd,0,0 );

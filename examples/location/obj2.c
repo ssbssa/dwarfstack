@@ -12,8 +12,9 @@
 
 static void stdoutPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    int *context )
+    void *context )
 {
+  int *count = context;
   const char *delim = strrchr( filename,'/' );
   if( delim ) filename = delim + 1;
   delim = strrchr( filename,'\\' );
@@ -35,13 +36,13 @@ static void stdoutPrint(
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       printf( "    stack %02d: 0x%p (%s)\n",
-          (*context)++,ptr,filename );
+          (*count)++,ptr,filename );
       break;
 
     default:
       if( ptr )
         printf( "    stack %02d: 0x%p (%s:%d)",
-            (*context)++,ptr,filename,lineno );
+            (*count)++,ptr,filename,lineno );
       else
         printf( "                %*s (%s:%d)",
             (int)sizeof(void*)*2,"",filename,lineno );
@@ -55,7 +56,7 @@ static void stdoutPrint(
 static void obj2func2( void )
 {
   int count = 0;
-  dwstOfLocation( (dwstCallback*)stdoutPrint,&count );
+  dwstOfLocation( stdoutPrint,&count );
 }
 
 void obj2func( void )

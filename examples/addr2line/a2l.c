@@ -16,8 +16,9 @@ static uint64_t prevAddr = 0;
 
 static void stdoutPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    int *context )
+    void *context )
 {
+  int *count = context;
   uint64_t tAddr = addr ? addr : prevAddr;
   int addrSize = tAddr>0xffffffff ? 16 : 8;
   switch( lineno )
@@ -29,13 +30,13 @@ static void stdoutPrint(
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       printf( "    stack %02d: 0x%0*I64X (%s)\n",
-          (*context)++,addrSize,addr,filename );
+          (*count)++,addrSize,addr,filename );
       break;
 
     default:
       if( addr )
         printf( "    stack %02d: 0x%0*I64X (%s:%d)",
-            (*context)++,addrSize,addr,filename,lineno );
+            (*count)++,addrSize,addr,filename,lineno );
       else
         printf( "                %*s (%s:%d)",
             addrSize,"",filename,lineno );
@@ -87,8 +88,7 @@ int main( int argc,char **argv )
   }
 
   int count = 0;
-  dwstOfFile( argv[1],base,addr,addrCount,
-      (dwstCallback*)&stdoutPrint,&count );
+  dwstOfFile( argv[1],base,addr,addrCount,&stdoutPrint,&count );
 
   return( 0 );
 }

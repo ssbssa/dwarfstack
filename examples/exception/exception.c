@@ -12,8 +12,9 @@
 
 static void stderrPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    int *context )
+    void *context )
 {
+  int *count = context;
   const char *delim = strrchr( filename,'/' );
   if( delim ) filename = delim + 1;
   delim = strrchr( filename,'\\' );
@@ -31,13 +32,13 @@ static void stderrPrint(
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       fprintf( stderr,"    stack %02d: 0x%p (%s)\n",
-          (*context)++,ptr,filename );
+          (*count)++,ptr,filename );
       break;
 
     default:
       if( ptr )
         fprintf( stderr,"    stack %02d: 0x%p (%s:%d)",
-            (*context)++,ptr,filename,lineno );
+            (*count)++,ptr,filename,lineno );
       else
         fprintf( stderr,"                %*s (%s:%d)",
             (int)sizeof(void*)*2,"",filename,lineno );
@@ -94,8 +95,7 @@ static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
   }
 
   int count = 0;
-  dwstOfException(
-      ep->ContextRecord,(dwstCallback*)&stderrPrint,&count );
+  dwstOfException( ep->ContextRecord,&stderrPrint,&count );
 
   fflush( stderr );
 
