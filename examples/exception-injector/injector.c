@@ -157,12 +157,12 @@ int main( void )
       process = OpenProcess( PROCESS_ALL_ACCESS,FALSE,processId );
     if( !process )
     {
-      printf( "can't create process for '%s'\n",args );
+      printf( "can't open process %d\n",processId );
       return( 1 );
     }
 
     if( isWrongArch(process) )
-      printf( "process %s is of a different architecture\n",args );
+      printf( "process %d is of a different architecture\n",processId );
     else
       inject( process,dllPath,DWST_FUNC );
 
