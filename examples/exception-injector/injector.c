@@ -157,7 +157,7 @@ int main( void )
       process = OpenProcess( PROCESS_ALL_ACCESS,FALSE,processId );
     if( !process )
     {
-      printf( "can't open process %d\n",processId );
+      printf( "can't create/open process %s\n",args );
       return( 1 );
     }
 
