@@ -236,6 +236,13 @@ dwarf_pe_init_link(const char *image,
             if (delim1) delim1++;
             else delim1 = link_path;
             strcpy(delim1, link);
+            if (GetFileAttributes(link_path) == INVALID_FILE_ATTRIBUTES) {
+                strcpy(delim1, ".debug/");
+                strcat(delim1, link);
+                if (GetFileAttributes(link_path) == INVALID_FILE_ATTRIBUTES) {
+                    link_path[0] = 0;
+                }
+            }
         }
 
         goto no_dbg;
