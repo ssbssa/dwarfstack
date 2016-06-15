@@ -6,9 +6,13 @@ CPPFLAGS = -DNO_DBGHELP
 OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
 INCLUDE = -Ilibdwarf -Imgwhelp -Iinclude
-CFLAGS = $(CPPFLAGS) $(OPT) -Wall -Wextra $(FRAME_POINTER) $(INCLUDE) -DDWST_MODE
+WARN = -Wall -Wextra
+CFLAGS = $(CPPFLAGS) $(OPT) $(WARN) $(FRAME_POINTER) $(INCLUDE)
 CFLAGS_STATIC = $(CFLAGS) -DDWST_STATIC
 CFLAGS_SHARED = $(CFLAGS) -DDWST_SHARED
+CFLAGS_LIBDWARF = $(CFLAGS) -DDW_TSHASHTYPE=uintptr_t \
+		  -Wno-unused \
+		  -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 
 
 # libdwarf
@@ -16,13 +20,21 @@ DWARF_SRC_REL = dwarf_alloc.c \
 		dwarf_die_deliv.c \
 		dwarf_error.c \
 		dwarf_form.c \
+		dwarf_frame.c \
+		dwarf_frame2.c \
+		dwarf_global.c \
+		dwarf_harmless.c \
 		dwarf_init_finish.c \
 		dwarf_leb.c \
 		dwarf_line.c \
+		dwarf_macro5.c \
 		dwarf_query.c \
 		dwarf_ranges.c \
+		dwarf_tied.c \
 		dwarf_tsearchhash.c \
 		dwarf_util.c \
+		dwarf_xu_index.c \
+		pro_encode_nm.c \
 
 DWARF_SRC = $(patsubst %,libdwarf/%,$(DWARF_SRC_REL))
 DWARF_OBJ = $(patsubst %.c,%.o,$(DWARF_SRC))
@@ -57,6 +69,12 @@ BUILD = $(LIB) $(BIN) $(INC)
 all: $(BUILD)
 
 .SUFFIXES: .c .o .dll.o
+
+
+# libdwarf
+
+$(DWARF_OBJ) $(DWARF_PE_OBJ): %.o: %.c
+	$(CC) -c $(CFLAGS_LIBDWARF) -o $@ $<
 
 
 # static library

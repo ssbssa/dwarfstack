@@ -3,7 +3,6 @@
   Copyright (C) 2000-2005 Silicon Graphics, Inc.  All Rights Reserved.
   Portions Copyright (C) 2007-2013 David Anderson. All Rights Reserved.
   Portions Copyright (C) 2008-2010 Arxan Technologies, Inc. All Rights Reserved.
-  Portions Copyright (C) 2013-2015 Hannes Domani. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -158,6 +157,8 @@ struct Dwarf_CU_Context_s {
     /*  cc_address_size is the size of an address in this
         compilation unit. */
     Dwarf_Small cc_address_size;
+    Dwarf_Small cc_segment_selector_size;
+
     /*  cc_debug_offset is the global offset in the section
         of the CU header of this CU.
         That is, it is a section global offset.
@@ -184,7 +185,6 @@ struct Dwarf_CU_Context_s {
         is DW_UT_type.  */
     Dwarf_Unsigned cc_type_signature_offset;
 
-#ifndef DWST_MODE
     /*  For each CU and each TU
         in a dwp package file there is
         is a hash and
@@ -196,7 +196,6 @@ struct Dwarf_CU_Context_s {
         must match the signature in cc_type_signature.
         */
     struct Dwarf_Debug_Fission_Per_CU_s  cc_dwp_offsets;
-#endif
 
 
     /*  If the attribute DW_AT_[GNU_]addr_base is present in the
@@ -219,11 +218,15 @@ struct Dwarf_CU_Context_s {
         Fields listed in this order for a tiny space saving
         as opposed to greatest clarity.
     */
-    Dwarf_Bool cc_type_signature_present; /* Meaning type signature
+    Dwarf_Bool cc_signature_present; /* Meaning type signature
         in TU header or, for CU header, signature in CU DIE. */
-    Dwarf_Bool cc_addr_base_present;       /* Not TRUE in .dwo */
-    Dwarf_Bool cc_str_ranges_base_present; /* Not TRUE in .dwo */
+    Dwarf_Bool cc_addr_base_present;   /* Not TRUE in .dwo */
+    Dwarf_Bool cc_ranges_base_present; /* Not TRUE in .dwo */
     Dwarf_Bool cc_str_offsets_base_present;
+
+    /*  Non zero if this context is a dwo section. Either
+        dwo or dwp file. */
+    Dwarf_Bool cc_is_dwo;
 
     /*  cc_cu_die_offset_present is non-zero if
         cc_cu_die_global_sec_offset is meaningful.  */
@@ -258,6 +261,10 @@ struct Dwarf_CU_Context_s {
         For DWARF 2,3,4 this is filled in initially
         from the CU header and refined by inspecting the TAG
         of the CU DIE to detect DW_UT_partial is applicable.  */
+
+    /*  If non-zero is the DW_AT_comp_dir string from
+        the DWARF data. Do not free. */
+    const char *  cc_at_comp_dir;
 };
 
 /*  Consolidates section-specific data in one place.
@@ -286,6 +293,19 @@ struct Dwarf_Section_s {
         detect duplicates. Ignored after setup done. */
     Dwarf_Small    dss_is_in_use;
 
+    /*  If this is zdebug, to start  data/size are the
+        raw section bytes.
+        Initially for all sections dss_data_was_malloc set FALSE
+            and dss_requires_decompress set FALSE.
+        For zdebug dss_requires_decompress then set TRUE
+
+        On translation (ie zlib use and malloc)
+        Set dss_data dss_size to point to malloc space and
+            malloc size.
+        Set dss_requires_decompress FALSE
+        Set dss_was_malloc  TRUE */
+    Dwarf_Small    dss_requires_decompress;
+
     /*  For non-elf, leaving the following fields zero
         will mean they are ignored. */
     /*  dss_link should be zero unless a section has a link
@@ -312,9 +332,18 @@ struct Dwarf_Section_s {
     /*  dss_name must never be freed, it is a quoted string
         in libdwarf. */
     const char * dss_name;
+
+    /* Object section number in object file. */
+    unsigned dss_number;
+
+    /*  These are elf flags and non-elf object should
+        just leave these fields zero. Which is essentially
+        automatic as they are not in
+        Dwarf_Obj_Access_Section_s.  */
+    Dwarf_Word  dss_flags;
+    Dwarf_Word  dss_addralign;
 };
 
-#ifndef DWST_MODE
 /*  Overview: if next_to_use== first, no error slots are used.
     If next_to_use+1 (mod maxcount) == first the slots are all used
 */
@@ -325,7 +354,6 @@ struct Dwarf_Harmless_s {
   unsigned dh_errs_count;
   char **  dh_errors;
 };
-#endif
 
 /* Data needed seperately for debug_info and debug_types
    as we may be reading both interspersed. */
@@ -367,8 +395,11 @@ typedef struct Dwarf_Debug_InfoTypes_s *Dwarf_Debug_InfoTypes;
 */
 
 struct Dwarf_dbg_sect_s {
-    /* Debug section name must not be freed, is quoted string. */
+    /*  Debug section name must not be freed, is quoted string.
+        This is the name from the object file itself. */
     const char *ds_name;
+    /* The section number in object section numbering. */
+    unsigned ds_number;
     /*   Debug section information, points to de_debug_*member
         (or the like) of the dbg struct.  */
     struct Dwarf_Section_s *ds_secdata;
@@ -376,6 +407,7 @@ struct Dwarf_dbg_sect_s {
     int ds_duperr;                     /* Error code for duplicated section */
     int ds_emptyerr;                   /* Error code for empty section */
     int ds_have_dwarf;                 /* Section contains DWARF */
+    int ds_have_zdebug;                /* Section compressed. */
 };
 
 /*  As the number of debug sections does not change very often, in the case a
@@ -385,11 +417,10 @@ struct Dwarf_dbg_sect_s {
     This does not yet allow for section-groups in object files,
     for which many .debug_info (and other) sections may exist.
 */
-#define DWARF_MAX_DEBUG_SECTIONS 30
+#define DWARF_MAX_DEBUG_SECTIONS 50
 
 
 
-#ifndef DWST_MODE
 /*  These offsets and sizes (Dwarf_Fission*) are
     for the  DebugFission DWP sections
     .debug_cu_index and .debug_tu_index.
@@ -466,8 +497,30 @@ struct Dwarf_Fission_Offsets_s {
         is tsearch needed here?
     void * dfo_hash_to_index; */
 };
-#endif
 
+/*  All the Dwarf_Debug tied-file info in one place.  */
+struct Dwarf_Tied_Data_s {
+    /*  Used to access executable from .dwo or .dwp object.
+        Pointer to the tied_to Dwarf_Debug*/
+    Dwarf_Debug td_tied_object;
+
+    /*  TRUE if this object is tied to.
+        It's extra work to look for a DW_AT_dwo_id.
+        This helps us do it only when it may be productive. */
+    Dwarf_Bool td_is_tied_object;
+
+    /*  If non-zero is a dwarf_tsearch 'tree'.
+        Only non-zero if td_is_tied_object is set and
+        we had a reason to build the search tree..
+
+        The Key for each record is a Dwarf_Sig8
+        (8 bytes).
+        The data for each is a pointer to a Dwarf_CU_context
+        record in this dbg (cu_context in
+        one of this dbg's de_cu_context_list). */
+    void *td_tied_search;
+
+};
 
 struct Dwarf_Debug_s {
     /*  All file access methods and support data
@@ -484,7 +537,8 @@ struct Dwarf_Debug_s {
 
     /*  Number of bytes in the length, and offset field in various
         .debug_* sections.  It's not very meaningful, and is
-        only used in one 'approximate' calculation.  */
+        only used in one 'approximate' calculation.
+        de_offset_size would be a more appropos name. */
     Dwarf_Small de_length_size;
 
     /*  number of bytes in a pointer of the target in various .debug_
@@ -537,13 +591,14 @@ struct Dwarf_Debug_s {
 
     struct Dwarf_Section_s de_debug_pubtypes; /* DWARF3 .debug_pubtypes */
 
-    struct Dwarf_Section_s de_debug_funcnames;
 
-    /* SGI IRIX extension essentially
-        identical to DWARF3 .debug_pubtypes. */
+    /*  Four SGI IRIX extensions essentially
+        identical to DWARF3 .debug_pubtypes.
+        Only on SGI IRIX. */
+    struct Dwarf_Section_s de_debug_funcnames;
     struct Dwarf_Section_s de_debug_typenames;
-    struct Dwarf_Section_s de_debug_varnames; /* SGI IRIX only. */
-    struct Dwarf_Section_s de_debug_weaknames; /* SGI IRIX only. */
+    struct Dwarf_Section_s de_debug_varnames;
+    struct Dwarf_Section_s de_debug_weaknames;
 
     struct Dwarf_Section_s de_debug_ranges;
     /*  Following two part of DebugFission. */
@@ -554,7 +609,6 @@ struct Dwarf_Debug_s {
     /* Following for the .gdb_index section.  */
     struct Dwarf_Section_s de_debug_gdbindex;
 
-#ifndef DWST_MODE
     /*  Types in DWARF5 are in .debug_info
         and in DWARF4 are in .debug_types.
         These indexes first standardized in DWARF5,
@@ -563,14 +617,12 @@ struct Dwarf_Debug_s {
         tu and cu indexes sections are distinct in DWARF4 & 5. */
     struct Dwarf_Section_s de_debug_cu_index;
     struct Dwarf_Section_s de_debug_tu_index;
-#endif
 
     /*  For non-elf, simply leave the following two structs zeroed and
         they will be ignored. */
     struct Dwarf_Section_s de_elf_symtab;
     struct Dwarf_Section_s de_elf_strtab;
 
-#ifndef DWST_MODE
     /*  For a .dwp object file .
         For DWARF4, type units are in .debug_types
             (DWP is a GNU extension in DW4)..
@@ -578,7 +630,6 @@ struct Dwarf_Debug_s {
     */
     Dwarf_Xu_Index_Header  de_cu_hashindex_data;
     Dwarf_Xu_Index_Header  de_tu_hashindex_data;
-#endif
 
     void *(*de_copy_word) (void *, const void *, size_t);
     unsigned char de_same_endian;
@@ -602,11 +653,11 @@ struct Dwarf_Debug_s {
     struct Dwarf_dbg_sect_s de_debug_sections[DWARF_MAX_DEBUG_SECTIONS];
     unsigned de_debug_sections_total_entries; /* Number actually used. */
 
-#ifndef DWST_MODE
     struct Dwarf_Harmless_s de_harmless_errors;
 
     struct Dwarf_Printf_Callback_Info_s  de_printf_callback;
-#endif
+
+    struct Dwarf_Tied_Data_s de_tied_data;
 
 };
 
@@ -620,6 +671,12 @@ typedef struct Dwarf_Chain_s *Dwarf_Chain;
 struct Dwarf_Chain_s {
     void *ch_item;
     Dwarf_Chain ch_next;
+};
+
+typedef struct Dwarf_Chain_o *Dwarf_Chain_2;
+struct Dwarf_Chain_o {
+    Dwarf_Off ch_item;
+    Dwarf_Chain_2 ch_next;
 };
 
     /* Size of cu header version stamp field. */
@@ -657,7 +714,7 @@ int _dwarf_exract_string_offset_via_str_offsets(Dwarf_Debug dbg,
 
 int _dwarf_extract_address_from_debug_addr(Dwarf_Debug dbg,
     Dwarf_CU_Context context,
-    Dwarf_Byte_Ptr info_ptr,
+    Dwarf_Unsigned index,
     Dwarf_Addr *addr_out,
     Dwarf_Error *error);
 
@@ -677,7 +734,6 @@ int _dwarf_get_base_and_size_given_signature(Dwarf_CU_Context *context,
     Dwarf_Unsigned *size_out,
     Dwarf_Error *err);
 
-#ifndef DWST_MODE
 Dwarf_Bool _dwarf_file_has_debug_fission_cu_index(Dwarf_Debug dbg);
 Dwarf_Bool _dwarf_file_has_debug_fission_tu_index(Dwarf_Debug dbg);
 Dwarf_Bool _dwarf_file_has_debug_fission_index(Dwarf_Debug dbg);
@@ -693,11 +749,94 @@ Dwarf_Unsigned _dwarf_get_dwp_extra_offset(
     struct Dwarf_Debug_Fission_Per_CU_s* dwp,
     unsigned whichone, Dwarf_Unsigned * size);
 
+/*  This will look into the tied Dwarf_Debug
+    to which should have a skeleton CU DIE
+    and an addr_base and also have the .debug_addr
+    section. */
+
+int _dwarf_get_addr_from_tied(Dwarf_Debug dbg,
+    Dwarf_CU_Context context,
+    Dwarf_Unsigned addrindex,
+    Dwarf_Addr *addr_out,
+    Dwarf_Error *error);
+
 
 int _dwarf_get_fission_addition_die(Dwarf_Die die, int dw_sect_index,
    Dwarf_Unsigned* offset, Dwarf_Unsigned*size,
    Dwarf_Error *error);
-#endif
 
-Dwarf_Byte_Ptr _dwarf_calculate_section_end_ptr(Dwarf_CU_Context context);
+int _dwarf_get_addr_index_itself(int theform,
+    Dwarf_Small *info_ptr,
+    Dwarf_Debug dbg,
+    Dwarf_CU_Context cu_context,
+    Dwarf_Unsigned *val_out,
+    Dwarf_Error * error);
+
+int
+_dwarf_search_for_signature(Dwarf_Debug dbg,
+   Dwarf_Sig8 sig,
+   Dwarf_CU_Context *context_out,
+   Dwarf_Error *error);
+
+
+void _dwarf_tied_destroy_free_node(void *node);
+
+int
+_dwarf_next_cu_header_internal(Dwarf_Debug dbg,
+    Dwarf_Bool is_info,
+    Dwarf_Unsigned * cu_header_length,
+    Dwarf_Half * version_stamp,
+    Dwarf_Unsigned * abbrev_offset,
+    Dwarf_Half * address_size,
+    Dwarf_Half * offset_size,
+    Dwarf_Half * extension_size,
+    Dwarf_Sig8 * signature,
+    Dwarf_Bool * has_signature,
+    Dwarf_Unsigned *typeoffset,
+    Dwarf_Unsigned * next_cu_offset,
+    Dwarf_Half     * header_cu_type,
+    Dwarf_Error * error);
+
+/* Relates to .debug_addr */
+int _dwarf_look_in_local_and_tied(Dwarf_Half attr_form,
+    Dwarf_CU_Context context,
+    Dwarf_Small *info_ptr,
+    Dwarf_Addr *return_addr,
+    Dwarf_Error *error);
+
+int _dwarf_get_ranges_base_attr_from_tied(Dwarf_Debug dbg,
+    Dwarf_CU_Context context,
+    Dwarf_Unsigned * ranges_base_out,
+    Dwarf_Error    * error);
+
+int _dwarf_get_string_from_tied(Dwarf_Debug dbg, Dwarf_Unsigned offset,
+    char **return_str, Dwarf_Error*error);
+
+int _dwarf_valid_form_we_know(Dwarf_Debug dbg,
+    Dwarf_Unsigned at_form,
+    Dwarf_Unsigned at_name);
+int _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
+    unsigned attrform,
+    Dwarf_Unsigned offset,
+    char ** return_str,
+    Dwarf_Error *  error);
+
+int _dwarf_file_name_is_full_path(Dwarf_Small  *fname);
+
+/*  This is an elf-only extension to get SHF_COMPRESSED flag from sh_flags.
+    if pointer not set (which is normal for non-elf objects)
+    it is fine.  */
+int (*_dwarf_get_elf_flags_func_ptr)(
+    void* obj_in,
+    Dwarf_Half section_index,
+    Dwarf_Unsigned *flags_out,
+    Dwarf_Unsigned *addralign_out,
+    int *error);
+
+Dwarf_Byte_Ptr _dwarf_calculate_info_section_start_ptr(Dwarf_CU_Context context, Dwarf_Unsigned *section_len_out);
+
+Dwarf_Byte_Ptr _dwarf_calculate_info_section_end_ptr(Dwarf_CU_Context context);
+Dwarf_Byte_Ptr _dwarf_calculate_abbrev_section_end_ptr(Dwarf_CU_Context context);
+
+void _dwarf_dumpsig(const char *msg, Dwarf_Sig8 *sig,int lineno);
 

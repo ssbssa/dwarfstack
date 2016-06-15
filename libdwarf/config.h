@@ -45,7 +45,7 @@
 #define HAVE_MEMORY_H 1
 
 /* Define 1 if need nonstandard printf format for 64bit */
-/* #undef HAVE_NONSTANDARD_PRINTF_64_FORMAT */
+#define HAVE_NONSTANDARD_PRINTF_64_FORMAT 1
 
 /* Define 1 to default to old DW_FRAME_CFA_COL */
 /* #undef HAVE_OLD_FRAME_CFA_COL */
@@ -92,8 +92,14 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
+/* Define 1 if __attribute__ ((unused)) compiles ok. */
+#define HAVE_UNUSED_ATTRIBUTE 1
+
 /* Define 1 if want to allow Windows full path detection */
 #define HAVE_WINDOWS_PATH 1
+
+/* Define 1 if zlib (decompression library) seems available. */
+/* #undef HAVE_ZLIB */
 
 /* See if __uint32_t is predefined in the compiler. */
 /* #undef HAVE___UINT32_T */

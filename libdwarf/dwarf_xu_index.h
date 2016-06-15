@@ -1,7 +1,8 @@
+#ifndef DWARF_XU_INDEX_H
+#define DWARF_XU_INDEX_H
 /*
 
-  Copyright (C) 2000 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2008-2011  David Anderson. All Rights Reserved.
+  Copyright (C) 2014-2014 David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -23,27 +24,45 @@
   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
   USA.
 
+
 */
 
 
 
-
-/*
-    This struct holds information about an abbreviation.
-    It is put in the hash table for abbreviations for
-    a compile-unit.
+/*  The following is based on
+    The gdb online documentation at
+    https://gcc.gnu.org/wiki/DebugFissionDWP
+    and the draft DWARF5 standard.
 */
-struct Dwarf_Abbrev_List_s {
-    Dwarf_Unsigned abl_code;
-    Dwarf_Half abl_tag;
-    Dwarf_Half abl_has_child;
 
-    /*  Points to start of attribute and form pairs in the .debug_abbrev
-        section for the abbrev. */
-    Dwarf_Byte_Ptr abl_abbrev_ptr;
-    struct Dwarf_Abbrev_List_s *abl_next;
 
-    /* Section global offset of this abbrev entry. */
-    Dwarf_Off      abl_goffset;
-    Dwarf_Unsigned abl_count;
+struct Dwarf_Xu_Index_Header_s {
+    Dwarf_Debug      gx_dbg;
+    Dwarf_Small    * gx_section_data;
+    Dwarf_Unsigned   gx_section_length;
+
+    Dwarf_Unsigned   gx_version;
+    Dwarf_Unsigned   gx_column_count_sections;  /* L */
+    Dwarf_Unsigned   gx_units_in_index;         /* N */
+    Dwarf_Unsigned   gx_slots_in_hash;          /* M */
+    Dwarf_Unsigned   gx_hash_table_offset;
+    Dwarf_Unsigned   gx_index_table_offset;
+    Dwarf_Unsigned   gx_section_offsets_offset;
+    Dwarf_Unsigned   gx_section_sizes_offset;
+
+    /* "tu" or "cu" without the quotes, of course. NUL terminated.  */
+    char             gx_type[4];
+
+    /* Do not free gx_section_name. */
+    const char     * gx_section_name;
 };
+
+#endif  /* DWARF_XU_INDEX_H */
+
+
+
+
+
+
+
+

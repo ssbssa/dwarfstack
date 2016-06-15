@@ -1,8 +1,6 @@
 /*
-
-  Copyright (C) 2008-2012 David Anderson. All Rights Reserved.
+  Copyright (C) 2008-2016 David Anderson. All Rights Reserved.
   Portions Copyright 2012 SN Systems Ltd. All rights reserved.
-  Portions Copyright (C) 2013 Hannes Domani. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -36,6 +34,10 @@ struct ranges_entry {
 };
 
 
+/*  Ranges are never in a split dwarf object. In the base object
+    instead. So use the tied_object if present.
+    We return an error which is on the incoming dbg, not
+    the possibly-tied-dbg localdbg. */
 #define MAX_ADDR ((address_size == 8)?0xffffffffffffffffULL:0xffffffff)
 int dwarf_get_ranges_a(Dwarf_Debug dbg,
     Dwarf_Off rangesoffset,
@@ -56,21 +58,56 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
     unsigned copyindex = 0;
     Dwarf_Half address_size = 0;
     int res = DW_DLV_ERROR;
+    Dwarf_Unsigned rangebase = 0;
+    Dwarf_Debug localdbg = dbg;
+    Dwarf_Error localerror = 0;
 
-    res = _dwarf_load_section(dbg, &dbg->de_debug_ranges,error);
-    if (res != DW_DLV_OK) {
+    if (localdbg->de_tied_data.td_tied_object) {
+        /*  ASSERT: localdbg->de_debug_ranges is missing: DW_DLV_NO_ENTRY.
+            So lets not look in dbg. */
+        Dwarf_CU_Context context = 0;
+        int restied = 0;
+
+        context = die->di_cu_context;
+        restied = _dwarf_get_ranges_base_attr_from_tied(localdbg,
+            context,
+            &rangebase,
+            error);
+        if (restied == DW_DLV_ERROR ) {
+            if(!error) {
+                return restied;
+            }
+            dwarf_dealloc(localdbg,*error,DW_DLA_ERROR);
+            *error = 0;
+            /* Nothing else to do. Look in original dbg. */
+        } else if (restied == DW_DLV_NO_ENTRY ) {
+            /* Nothing else to do. Look in original dbg. */
+        } else {
+            /*  Ranges are never in a split dwarf object.
+                In the base object
+                instead. Use the tied_object */
+            localdbg = dbg->de_tied_data.td_tied_object;
+        }
+    }
+
+
+    res = _dwarf_load_section(localdbg, &localdbg->de_debug_ranges,&localerror);
+    if (res == DW_DLV_ERROR) {
+        _dwarf_error_mv_s_to_t(localdbg,&localerror,dbg,error);
+        return res;
+    } else if (res == DW_DLV_NO_ENTRY) {
         return res;
     }
 
-    if (rangesoffset >= dbg->de_debug_ranges.dss_size) {
+    if ((rangesoffset +rangebase) >= localdbg->de_debug_ranges.dss_size) {
         _dwarf_error(dbg, error, DW_DLE_DEBUG_RANGES_OFFSET_BAD);
         return (DW_DLV_ERROR);
 
     }
-    address_size = _dwarf_get_address_size(dbg, die);
-    section_end = dbg->de_debug_ranges.dss_data +
-        dbg->de_debug_ranges.dss_size;
-    rangeptr = dbg->de_debug_ranges.dss_data + rangesoffset;
+    address_size = _dwarf_get_address_size(localdbg, die);
+    section_end = localdbg->de_debug_ranges.dss_data +
+        localdbg->de_debug_ranges.dss_size;
+    rangeptr = localdbg->de_debug_ranges.dss_data + rangesoffset+rangebase;
     beginrangeptr = rangeptr;
 
     for (;;) {
@@ -87,13 +124,15 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
             return (DW_DLV_ERROR);
         }
         entry_count++;
-        READ_UNALIGNED(dbg,re->cur.dwr_addr1,
+        READ_UNALIGNED_CK(localdbg,re->cur.dwr_addr1,
             Dwarf_Addr, rangeptr,
-            address_size);
+            address_size,
+            error,section_end);
         rangeptr +=  address_size;
-        READ_UNALIGNED(dbg,re->cur.dwr_addr2 ,
+        READ_UNALIGNED_CK(localdbg,re->cur.dwr_addr2 ,
             Dwarf_Addr, rangeptr,
-            address_size);
+            address_size,
+            error,section_end);
         rangeptr +=  address_size;
         if (!base) {
             base = re;
@@ -112,9 +151,11 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
         }
     }
 
+    /* We return ranges on dbg, so use that to allocate. */
     ranges_data_out =   (Dwarf_Ranges *)
-    _dwarf_get_alloc(dbg,DW_DLA_RANGES,entry_count);
+        _dwarf_get_alloc(dbg,DW_DLA_RANGES,entry_count);
     if (!ranges_data_out) {
+        /* Error, apply to original, not local dbg. */
         _dwarf_error(dbg, error, DW_DLE_DEBUG_RANGES_OUT_OF_MEM);
         return (DW_DLV_ERROR);
     }
@@ -135,7 +176,6 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
     }
     return DW_DLV_OK;
 }
-#ifndef DWST_MODE
 int dwarf_get_ranges(Dwarf_Debug dbg,
     Dwarf_Off rangesoffset,
     Dwarf_Ranges ** rangesbuf,
@@ -148,11 +188,10 @@ int dwarf_get_ranges(Dwarf_Debug dbg,
         rangesbuf,listlen,bytecount,error);
     return res;
 }
-#endif
 
 void
 dwarf_ranges_dealloc(Dwarf_Debug dbg, Dwarf_Ranges * rangesbuf,
-    Dwarf_Signed UNUSED(rangecount))
+    UNUSEDARG Dwarf_Signed rangecount)
 {
     dwarf_dealloc(dbg,rangesbuf, DW_DLA_RANGES);
 }

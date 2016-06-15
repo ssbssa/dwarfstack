@@ -59,6 +59,8 @@
 
 /* .debug_line_str (and .dwo) new in DWARF5. */
 #define DW_LINE_STR_VERSION5   5
+#define EXPERIMENTAL_LINE_TABLES_VERSION  0xf006 /* Experimental two-level line tables */
+
 /* .debug_loc (and .dwo) First header version number is  DWARF5. */
 #define DW_LOC_VERSION5   5
 
@@ -111,11 +113,12 @@
 #define DW_DLA_PUBTYPES_CONTEXT 0x2b  /* DWARF3 */
 #define DW_DLA_HASH_TABLE_ENTRY 0x2c
 #define DW_DLA_FISSION_PERCU    0x2d
+#define DW_DLA_CHAIN_2          0x3d
 /* Thru 0x36 reserved for internal future use. */
 
 /*  Maximum number of allocation types for allocation routines.
     Only used with malloc_check.c and that is basically obsolete. */
-#define MAX_DW_DLA		0x38
+#define MAX_DW_DLA		0x3a
 
 /*Dwarf_Word  is unsigned word usable for index, count in memory */
 /*Dwarf_Sword is   signed word usable for index, count in memory */

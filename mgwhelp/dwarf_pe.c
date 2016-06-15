@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Jose Fonseca
- * Copyright (C) 2013-2015 Hannes Domani
+ * Copyright (C) 2013-2016 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,7 +44,7 @@ static int
 pe_get_section_info(void *obj,
                     Dwarf_Half section_index,
                     Dwarf_Obj_Access_Section *return_section,
-                    int *UNUSED(error))
+                    UNUSEDARG int *error)
 {
     pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
 
@@ -74,7 +74,7 @@ pe_get_section_info(void *obj,
 
 
 static Dwarf_Endianness
-pe_get_byte_order(void *UNUSED(obj))
+pe_get_byte_order(UNUSEDARG void *obj)
 {
     return DW_OBJECT_LSB;
 }
@@ -102,7 +102,7 @@ static int
 pe_load_section(void *obj,
                 Dwarf_Half section_index,
                 Dwarf_Small **return_data,
-                int *UNUSED(error))
+                UNUSEDARG int *error)
 {
     pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
     if (section_index == 0) {

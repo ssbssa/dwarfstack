@@ -1,7 +1,6 @@
 /*
 
-  Copyright (C) 2000 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2008-2011  David Anderson. All Rights Reserved.
+  Copyright (C) 2000,2004 Silicon Graphics, Inc.  All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -27,23 +26,9 @@
 
 
 
+Dwarf_Ptr _dwarf_p_get_alloc(Dwarf_P_Debug, Dwarf_Unsigned);
 
-/*
-    This struct holds information about an abbreviation.
-    It is put in the hash table for abbreviations for
-    a compile-unit.
-*/
-struct Dwarf_Abbrev_List_s {
-    Dwarf_Unsigned abl_code;
-    Dwarf_Half abl_tag;
-    Dwarf_Half abl_has_child;
+void dwarf_p_dealloc(Dwarf_Small * ptr); /* DO NOT USE. */
+void _dwarf_p_dealloc(Dwarf_P_Debug,Dwarf_Small * ptr);
 
-    /*  Points to start of attribute and form pairs in the .debug_abbrev
-        section for the abbrev. */
-    Dwarf_Byte_Ptr abl_abbrev_ptr;
-    struct Dwarf_Abbrev_List_s *abl_next;
-
-    /* Section global offset of this abbrev entry. */
-    Dwarf_Off      abl_goffset;
-    Dwarf_Unsigned abl_count;
-};
+void _dwarf_p_dealloc_all(Dwarf_P_Debug dbg);

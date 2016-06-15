@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Hannes Domani
+ * Copyright (C) 2013-2016 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -116,7 +116,7 @@ Dwarf_Ptr _dwarf_get_alloc( Dwarf_Debug,Dwarf_Small,Dwarf_Unsigned );
 #endif
 
 // get function name of specified DIE
-static int dwarf_name_of_func( Dwarf_Debug UNUSED(dbg),Dwarf_Die die,
+static int dwarf_name_of_func( Dwarf_Debug dbg,Dwarf_Die die,
     char **funcname )
 {
   *funcname = NULL;
@@ -151,6 +151,8 @@ static int dwarf_name_of_func( Dwarf_Debug UNUSED(dbg),Dwarf_Die die,
       }
     }
   }
+#else
+  (void)dbg;
 #endif
 
   res = dwarf_diename( die,&local_funcname,NULL );
