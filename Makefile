@@ -11,6 +11,7 @@ CFLAGS = $(CPPFLAGS) $(OPT) $(WARN) $(FRAME_POINTER) $(INCLUDE)
 CFLAGS_STATIC = $(CFLAGS) -DDWST_STATIC
 CFLAGS_SHARED = $(CFLAGS) -DDWST_SHARED
 CFLAGS_LIBDWARF = $(CFLAGS) -DDW_TSHASHTYPE=uintptr_t \
+		  -Izlib \
 		  -Wno-unused \
 		  -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 
@@ -47,6 +48,19 @@ DWARF_PE_SRC = $(patsubst %,mgwhelp/%,$(DWARF_PE_SRC_REL))
 DWARF_PE_OBJ = $(patsubst %.c,%.o,$(DWARF_PE_SRC))
 
 
+# zlib
+ZLIB_SRC_REL = adler32.c \
+	       crc32.c \
+	       inffast.c \
+	       inflate.c \
+	       inftrees.c \
+	       uncompr.c \
+	       zutil.c \
+
+ZLIB_SRC = $(patsubst %,zlib/%,$(ZLIB_SRC_REL))
+ZLIB_OBJ = $(patsubst %.c,%.o,$(ZLIB_SRC))
+
+
 # dwarfstack
 DWST_SRC_REL = dwst-file.c \
 	       dwst-process.c \
@@ -81,16 +95,16 @@ $(DWARF_OBJ) $(DWARF_PE_OBJ): %.o: %.c
 .c.o:
 	$(CC) -c $(CFLAGS_STATIC) -o $@ $<
 
-lib/libdwarfstack.a: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
-	ar rcs $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ)
+lib/libdwarfstack.a: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
+	ar rcs $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ)
 
 
 # shared library
 .c.dll.o:
 	$(CC) -c $(CFLAGS_SHARED) -o $@ $<
 
-bin/dwarfstack.dll: $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
-	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
+bin/dwarfstack.dll: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
+	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
 
 lib/libdwarfstack.dll.a: bin/dwarfstack.dll
 
@@ -103,7 +117,7 @@ bin:
 
 
 clean:
-	rm -rf $(DWARF_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) $(DWST_DLL_OBJ) lib bin
+	rm -rf $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) $(DWST_DLL_OBJ) lib bin
 
 
 # install

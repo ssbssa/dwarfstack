@@ -99,7 +99,7 @@
 #define HAVE_WINDOWS_PATH 1
 
 /* Define 1 if zlib (decompression library) seems available. */
-/* #undef HAVE_ZLIB */
+#define HAVE_ZLIB 1
 
 /* See if __uint32_t is predefined in the compiler. */
 /* #undef HAVE___UINT32_T */
