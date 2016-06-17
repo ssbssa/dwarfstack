@@ -43,9 +43,10 @@ extern "C" {
 //   lineno:            line number
 //   funcname:          function name
 //   context:           user-provided pointer (callbackContext)
+//   columnno:          column number
 typedef void dwstCallback(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    void *context );
+    void *context,int columnno );
 
 // special values for lineno:
 

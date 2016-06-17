@@ -73,7 +73,8 @@ struct dialog_info
 };
 
 static void printAddr( HWND hwnd,const TCHAR *beg,int num,
-    void *ptr,const TCHAR *posFile,int posLine,const TCHAR *funcName )
+    void *ptr,const TCHAR *posFile,int posLine,const TCHAR *funcName,
+    int posColumn )
 {
   TCHAR hexNum[20];
 
@@ -109,6 +110,13 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
       Edit_ReplaceSel( hwnd,TEXT(":") );
       _stprintf( hexNum,TEXT("%d"),posLine );
       Edit_ReplaceSel( hwnd,hexNum );
+
+      if( posColumn>0 )
+      {
+        Edit_ReplaceSel( hwnd,TEXT(":") );
+        _stprintf( hexNum,TEXT("%d"),posColumn );
+        Edit_ReplaceSel( hwnd,hexNum );
+      }
     }
 
     Edit_ReplaceSel( hwnd,TEXT(")") );
@@ -126,7 +134,7 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
 
 static void dlgPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    void *context )
+    void *context,int columnno )
 {
   struct dialog_info *di = context;
 #ifndef NO_DBGHELP
@@ -169,19 +177,19 @@ static void dlgPrint(
       di->lastBase = ptr;
 
       printAddr( di->hwnd,TEXT("base address"),-1,
-          ptr,filename,0,NULL );
+          ptr,filename,0,NULL,0 );
       break;
 
     case DWST_NOT_FOUND:
     case DWST_NO_DBG_SYM:
     case DWST_NO_SRC_FILE:
       printAddr( di->hwnd,TEXT("    stack "),di->count++,
-          ptr,NULL,0,funcname );
+          ptr,NULL,0,funcname,0 );
       break;
 
     default:
       printAddr( di->hwnd,TEXT("    stack "),di->count,
-          ptr,filename,lineno,funcname );
+          ptr,filename,lineno,funcname,columnno );
       if( ptr ) di->count++;
       break;
   }

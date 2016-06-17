@@ -12,7 +12,7 @@
 
 static void stdoutPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    void *context )
+    void *context,int columnno )
 {
   int *count = context;
   const char *delim = strrchr( filename,'/' );
@@ -41,11 +41,13 @@ static void stdoutPrint(
 
     default:
       if( ptr )
-        printf( "    stack %02d: 0x%p (%s:%d)",
-            (*count)++,ptr,filename,lineno );
+        printf( "    stack %02d: 0x%p",(*count)++,ptr );
       else
-        printf( "                %*s (%s:%d)",
-            (int)sizeof(void*)*2,"",filename,lineno );
+        printf( "                %*s",(int)sizeof(void*)*2,"" );
+      printf( " (%s:%d",filename,lineno );
+      if( columnno>0 )
+        printf( ":%d",columnno );
+      printf( ")" );
       if( funcname )
         printf( " [%s]",funcname );
       printf( "\n" );

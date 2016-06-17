@@ -16,7 +16,7 @@ static uint64_t prevAddr = 0;
 
 static void stdoutPrint(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
-    void *context )
+    void *context,int columnno )
 {
   int *count = context;
   uint64_t tAddr = addr ? addr : prevAddr;
@@ -35,11 +35,13 @@ static void stdoutPrint(
 
     default:
       if( addr )
-        printf( "    stack %02d: 0x%0*I64X (%s:%d)",
-            (*count)++,addrSize,addr,filename,lineno );
+        printf( "    stack %02d: 0x%0*I64X",(*count)++,addrSize,addr );
       else
-        printf( "                %*s (%s:%d)",
-            addrSize,"",filename,lineno );
+        printf( "                %*s",addrSize,"" );
+      printf( " (%s:%d",filename,lineno );
+      if( columnno>0 )
+        printf( ":%d",columnno );
+      printf( ")" );
       if( funcname )
         printf( " [%s]",funcname );
       printf( "\n" );
