@@ -3,7 +3,9 @@ DWST_VERSION = 1.3-git
 
 SRC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
-CC = gcc
+HOSTPREFIX =
+CC = $(HOSTPREFIX)gcc
+AR = $(HOSTPREFIX)ar
 CPPFLAGS = -DNO_DBGHELP
 OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
@@ -120,7 +122,7 @@ $(DWARF_OBJ) $(DWARF_PE_OBJ): %.o: %.c
 	$(CC) -c $(CFLAGS_STATIC) -o $@ $<
 
 lib/libdwarfstack.a: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
-	ar rcs $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ)
+	$(AR) rcs $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ)
 
 
 # shared library
