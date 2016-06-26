@@ -1,17 +1,19 @@
 
 DWST_VERSION = 1.3-git
 
+SRC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+
 CC = gcc
 CPPFLAGS = -DNO_DBGHELP
 OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
-INCLUDE = -Ilibdwarf -Imgwhelp -Iinclude
+INCLUDE = -I$(SRC_DIR)libdwarf -I$(SRC_DIR)mgwhelp -I$(SRC_DIR)include
 WARN = -Wall -Wextra
 CFLAGS = $(CPPFLAGS) $(OPT) $(WARN) $(FRAME_POINTER) $(INCLUDE)
 CFLAGS_STATIC = $(CFLAGS) -DDWST_STATIC
 CFLAGS_SHARED = $(CFLAGS) -DDWST_SHARED
 CFLAGS_LIBDWARF = $(CFLAGS) -DDW_TSHASHTYPE=uintptr_t \
-		  -Izlib \
+		  -I$(SRC_DIR)zlib \
 		  -Wno-unused \
 		  -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 
@@ -85,6 +87,28 @@ all: $(BUILD)
 .SUFFIXES: .c .o .dll.o
 
 
+src libdwarf mgwhelp zlib include lib bin:
+	@mkdir -p $@
+
+
+ifneq ($(SRC_DIR),./)
+
+vpath %.c $(SRC_DIR)
+
+$(DWST_OBJ) $(DWST_DLL_OBJ) : | src
+$(DWARF_OBJ) : | libdwarf
+$(DWARF_PE_OBJ) : | mgwhelp
+$(ZLIB_OBJ) : | zlib
+
+$(INC): $(SRC_DIR)$(INC) | include
+	cp -fp $< $@
+
+LICENSE.txt: $(SRC_DIR)LICENSE.txt
+	cp -fp $< $@
+
+endif
+
+
 # libdwarf
 
 $(DWARF_OBJ) $(DWARF_PE_OBJ): %.o: %.c
@@ -109,13 +133,6 @@ bin/dwarfstack.dll: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | l
 lib/libdwarfstack.dll.a: bin/dwarfstack.dll
 
 
-lib:
-	@mkdir -p lib
-
-bin:
-	@mkdir -p bin
-
-
 clean:
 	rm -rf $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) $(DWST_DLL_OBJ) lib bin
 
@@ -135,4 +152,4 @@ package: $(BUILD) LICENSE.txt
 	tar -cJf dwarfstack-$(DWST_VERSION)-mingw.tar.xz $^
 
 package-src:
-	git archive "HEAD^{tree}" |xz >dwarfstack-$(DWST_VERSION).tar.xz
+	CURDIR=`pwd`; cd $(SRC_DIR) && git archive "HEAD^{tree}" |xz >$$CURDIR/dwarfstack-$(DWST_VERSION).tar.xz
