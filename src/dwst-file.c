@@ -323,9 +323,8 @@ int dwstOfFile(
     callbackFunc( imageBase,name,DWST_BASE_ADDR,NULL,callbackContext,0 );
 
   Dwarf_Addr imageBase_dbg;
-  Dwarf_Off baseOfCode;
   Dwarf_Debug dbg;
-  if( dwarf_pe_init(name,&imageBase_dbg,&baseOfCode,0,0,&dbg,NULL)!=DW_DLV_OK )
+  if( dwarf_pe_init(name,&imageBase_dbg,0,0,&dbg,NULL)!=DW_DLV_OK )
   {
     int i;
     for( i=0; i<count; i++ )
@@ -420,9 +419,7 @@ int dwstOfFile(
   uint64_t baseOffs = 0;
   if( imageBase )
   {
-    if( baseOfCode && lowestLow>baseOfCode )
-      baseOffs = ( lowestLow - baseOfCode ) - imageBase;
-    else if( imageBase_dbg )
+    if( imageBase_dbg )
       baseOffs = imageBase_dbg - imageBase;
   }
 

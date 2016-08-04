@@ -34,7 +34,6 @@ extern "C" {
 int
 dwarf_pe_init(const char *image,
               Dwarf_Addr *imagebase,
-              Dwarf_Off *baseofcode,
               Dwarf_Handler errhand,
               Dwarf_Ptr errarg,
               Dwarf_Debug * ret_dbg, Dwarf_Error * error);
