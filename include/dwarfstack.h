@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 Hannes Domani
+ * Copyright (C) 2013-2016 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -119,6 +119,17 @@ EXPORT int dwstOfException(
 //      (for example see examples/exception-dialog/)
 EXPORT void dwstExceptionDialog(
     const char *extraInfo );
+
+
+#ifndef DWST_STATIC
+// dwstDemangle(): demangle gcc style c++ symbols
+//   mangled:           mangled name
+//   demangled:         demangled name
+//   length:            size of demangled buffer
+EXPORT size_t dwstDemangle(
+    const char *mangled,
+    char *demangled,size_t length );
+#endif
 
 
 #ifdef __cplusplus

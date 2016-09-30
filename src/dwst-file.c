@@ -113,6 +113,25 @@ static int dwarf_die_by_ref( Dwarf_Debug dbg,Dwarf_Die die,
 #ifdef DWST_SHARED
 char *__cxa_demangle( const char*,char*,size_t*,int* );
 Dwarf_Ptr _dwarf_get_alloc( Dwarf_Debug,Dwarf_Small,Dwarf_Unsigned );
+
+
+size_t dwstDemangle(
+    const char *mangled,
+    char *demangled,size_t length )
+{
+  if( !mangled || mangled[0]!='_' || mangled[1]!='Z' ||
+      !demangled || !length )
+    return( 0 );
+
+  char *d = __cxa_demangle( mangled,NULL,NULL,NULL );
+  if( !d ) return( 0 );
+
+  strncpy( demangled,d,length );
+  length = strlen( d );
+  free( d );
+
+  return( length );
+}
 #endif
 
 // get function name of specified DIE
