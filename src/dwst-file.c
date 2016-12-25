@@ -329,6 +329,10 @@ typedef struct cu_info
 {
   Dwarf_Off offs;
   Dwarf_Addr low,high;
+  Dwarf_Line *lines;
+  Dwarf_Signed lineCount;
+  char **files;
+  Dwarf_Signed fileCount;
 } cu_info;
 
 int dwstOfFile(
@@ -432,6 +436,11 @@ int dwstOfFile(
       }
     }
 
+    cuInfo->lines = NULL;
+    cuInfo->lineCount = -1;
+    cuInfo->files = NULL;
+    cuInfo->fileCount = -1;
+
     dwarf_dealloc( dbg,die,DW_DLA_DIE );
   }
 
@@ -458,12 +467,23 @@ int dwstOfFile(
       if( cuInfo->offs &&
           dwarf_offdie(dbg,cuArr[j].offs,&die,NULL)==DW_DLV_OK )
       {
-        Dwarf_Line *lines;
-        Dwarf_Signed lineCount;
+        Dwarf_Line *lines = cuInfo->lines;
+        Dwarf_Signed lineCount = cuInfo->lineCount;
+        if( lineCount<0 )
+        {
+          if( dwarf_srclines(die,&lines,&lineCount,NULL)!=DW_DLV_OK )
+          {
+            lines = NULL;
+            lineCount = 0;
+          }
+          cuInfo->lines = lines;
+          cuInfo->lineCount = lineCount;
+        }
+
         Dwarf_Unsigned srcfileno = 0;
         Dwarf_Unsigned lineno = 0;
         Dwarf_Unsigned columnno = 0;
-        if( dwarf_srclines(die,&lines,&lineCount,NULL)==DW_DLV_OK )
+        if( lines )
         {
           int c;
           int onEnd = 1;
@@ -473,13 +493,14 @@ int dwstOfFile(
             Dwarf_Addr add;
             if( dwarf_lineaddr(lines[c],&add,NULL)!=DW_DLV_OK )
               break;
-            Dwarf_Bool endsequence;
-            if( dwarf_lineendsequence(lines[c],&endsequence,NULL)!=DW_DLV_OK )
-              break;
 
             if( onEnd || add<=ptr || prevAdd>ptr )
             {
-              onEnd = endsequence;
+              Dwarf_Bool endsequ;
+              if( dwarf_lineendsequence(lines[c],&endsequ,NULL)!=DW_DLV_OK )
+                break;
+
+              onEnd = endsequ;
               prevAdd = add;
               continue;
             }
@@ -489,14 +510,22 @@ int dwstOfFile(
             dwarf_lineoff_b( lines[c-1],&columnno,NULL );
             break;
           }
-
-          dwarf_srclines_dealloc( dbg,lines,lineCount );
         }
 
-        char **files;
-        Dwarf_Signed fileCount;
-        if( srcfileno && lineno &&
-            dwarf_srcfiles(die,&files,&fileCount,NULL)==DW_DLV_OK )
+        char **files = cuInfo->files;
+        Dwarf_Signed fileCount = cuInfo->fileCount;
+        if( srcfileno && lineno && fileCount<0 )
+        {
+          if( dwarf_srcfiles(die,&files,&fileCount,NULL)!=DW_DLV_OK )
+          {
+            files = NULL;
+            fileCount = 0;
+          }
+          cuInfo->files = files;
+          cuInfo->fileCount = fileCount;
+        }
+
+        if( srcfileno && lineno && files )
         {
           found_ptr = 1;
 
@@ -510,12 +539,6 @@ int dwstOfFile(
           else
             callbackFunc( ptrOrig,
                 name,DWST_NO_SRC_FILE,NULL,callbackContext,0 );
-
-          int fc;
-          for( fc=0; fc<fileCount; fc++ )
-            dwarf_dealloc( dbg,files[fc],DW_DLA_STRING );
-
-          dwarf_dealloc( dbg,files,DW_DLA_LIST );
         }
 
         dwarf_dealloc( dbg,die,DW_DLA_DIE );
@@ -529,6 +552,22 @@ int dwstOfFile(
           name,DWST_NOT_FOUND,NULL,callbackContext,0 );
   }
 
+  for( j=0; j<cuQty; j++ )
+  {
+    if( cuArr[j].lines )
+      dwarf_srclines_dealloc( dbg,cuArr[j].lines,cuArr[j].lineCount );
+
+    if( cuArr[j].files )
+    {
+      char **files = cuArr[j].files;
+      int fileCount = cuArr[j].fileCount;
+      int fc;
+      for( fc=0; fc<fileCount; fc++ )
+        dwarf_dealloc( dbg,files[fc],DW_DLA_STRING );
+
+      dwarf_dealloc( dbg,files,DW_DLA_LIST );
+    }
+  }
   free( cuArr );
 
   dwarf_pe_finish( dbg,NULL );
