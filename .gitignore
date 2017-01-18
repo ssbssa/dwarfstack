@@ -1,7 +1,10 @@
-bin
-lib
+/bin
+/lib
+/build32
+/build64
 *.swp
 *.o
 *.exe
 *.dll
 *.a
+*.tar.xz

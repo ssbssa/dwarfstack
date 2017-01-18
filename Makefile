@@ -155,3 +155,16 @@ package: $(BUILD) LICENSE.txt
 
 package-src:
 	CURDIR=`pwd`; cd $(SRC_DIR) && git archive "HEAD^{tree}" |xz >$$CURDIR/dwarfstack-$(DWST_VERSION).tar.xz
+
+
+packages: package-src package32 package64
+
+package32:
+	@mkdir -p build32
+	$(MAKE) -C build32 -f ../Makefile HOSTPREFIX=i686-w64-mingw32- package
+	cp -f build32/dwarfstack-$(DWST_VERSION)-mingw.tar.xz dwarfstack-$(DWST_VERSION)-mingw32.tar.xz
+
+package64:
+	@mkdir -p build64
+	$(MAKE) -C build64 -f ../Makefile HOSTPREFIX=x86_64-w64-mingw32- package
+	cp -f build64/dwarfstack-$(DWST_VERSION)-mingw.tar.xz dwarfstack-$(DWST_VERSION)-mingw64.tar.xz
