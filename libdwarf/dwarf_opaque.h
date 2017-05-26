@@ -40,12 +40,15 @@
     .debug_info             2      3      4      5
     .debug_line             2      3      4      5
     .debug_line_str         -      -      -      5
-    .debug_loc              *      *      *      5
+    .debug_loc              *      *      *      -
+    .debug_loclists         -      -      -      5
     .debug_macinfo          *      *      *      -
     .debug_macro            -      -      -      5
+    .debug_names            -      -      -      5
     .debug_pubnames         2      2      2      -
     .debug_pubtypes         -      2      2      -
-    .debug_ranges           -      *      *      5
+    .debug_ranges           -      *      *      -
+    .debug_rnglists         -      -      -      5
     .debug_str              *      *      *      *
     .debug_str_offsets      -      -      -      5
     .debug_sup              -      -      -      5
@@ -54,8 +57,10 @@
     .debug_abbrev.dwo       -      -      -      *
     .debug_info.dwo         -      -      -      5
     .debug_line.dwo         -      -      -      5
-    .debug_loc.dwo          -      -      -      5
+    .debug_loc.dwo          -      -      -      -
+    .debug_loclists.dwo     -      -      -      5
     .debug_macro.dwo        -      -      -      5
+    .debug_rnglists.dwo     -      -      -      5
     .debug_str.dwo          -      -      -      *
     .debug_str_offsets.dwo  -      -      -      5
 
@@ -170,19 +175,23 @@ struct Dwarf_CU_Context_s {
     Dwarf_Unsigned cc_debug_offset;
 
     /*  cc_signature is in the TU header
-        of a type unit of a TU DIE.
+        of a type unit of a TU DIE (or for DW5 in the
+        skeleton or split_compile header is a dwo_id).
         Ignore this field if cc_signature_present is zero.
 
         If cc_unit_type == DW_UT_compile or DW_UT_partial
-            the signature is a CU signature.
-        If cc_unit_type == DW_UT_type
+            the signature is a CU signature (dwo_id).
+        Some early DW5 drafts encouraged DWARF4 output
+            of some compilers to include dwo_id, but
+            in a messier way(lacking DW_UT_*).
+        If cc_unit_type == DW_UT_type or DW_UT_split_type
             the signature is a type signature. */
     Dwarf_Sig8  cc_type_signature;
 
-    /*  cc_typeoffsets contains the
+    /*  cc_type_signature_offset contains the
         section-local DIE offset of the type
         the signature applies to if the cc_unit_type
-        is DW_UT_type.  */
+        is DW_UT_type or DW_UT_split_type. */
     Dwarf_Unsigned cc_type_signature_offset;
 
     /*  For each CU and each TU
@@ -420,7 +429,6 @@ struct Dwarf_dbg_sect_s {
 #define DWARF_MAX_DEBUG_SECTIONS 50
 
 
-
 /*  These offsets and sizes (Dwarf_Fission*) are
     for the  DebugFission DWP sections
     .debug_cu_index and .debug_tu_index.
@@ -535,6 +543,9 @@ struct Dwarf_Debug_s {
     struct Dwarf_Debug_InfoTypes_s de_info_reading;
     struct Dwarf_Debug_InfoTypes_s de_types_reading;
 
+    /* DW_GROUPNUMBER_ANY or BASE or DWO */
+    unsigned de_groupnumber;
+
     /*  Number of bytes in the length, and offset field in various
         .debug_* sections.  It's not very meaningful, and is
         only used in one 'approximate' calculation.
@@ -579,11 +590,13 @@ struct Dwarf_Debug_s {
     struct Dwarf_Section_s de_debug_loc;
     struct Dwarf_Section_s de_debug_aranges;
     struct Dwarf_Section_s de_debug_macinfo;
-    struct Dwarf_Section_s de_debug_macro; /* New in DWARF5 */
-    struct Dwarf_Section_s de_debug_names; /* New in DWARF5 */
+    struct Dwarf_Section_s de_debug_macro;    /* New in DWARF5 */
+    struct Dwarf_Section_s de_debug_names;    /* New in DWARF5 */
     struct Dwarf_Section_s de_debug_pubnames;
     struct Dwarf_Section_s de_debug_str;
-    struct Dwarf_Section_s de_debug_sup;  /* New in DWARF5 */
+    struct Dwarf_Section_s de_debug_sup;      /* New in DWARF5 */
+    struct Dwarf_Section_s de_debug_loclists; /* New in DWARF5 */
+    struct Dwarf_Section_s de_debug_rnglists; /* New in DWARF5 */
     struct Dwarf_Section_s de_debug_frame;
 
     /* gnu: the g++ eh_frame section */
@@ -601,7 +614,7 @@ struct Dwarf_Debug_s {
     struct Dwarf_Section_s de_debug_weaknames;
 
     struct Dwarf_Section_s de_debug_ranges;
-    /*  Following two part of DebugFission. */
+    /*  Following two part of DebugFission and DWARF5 */
     struct Dwarf_Section_s de_debug_str_offsets;
     struct Dwarf_Section_s de_debug_addr;
 
@@ -703,8 +716,9 @@ int _dwarf_get_string_base_attr_value(Dwarf_Debug dbg,
     Dwarf_Unsigned *sbase_out,
     Dwarf_Error *error);
 
-int _dwarf_exract_string_offset_via_str_offsets(Dwarf_Debug dbg,
-    Dwarf_Small *info_data_ptr,
+int _dwarf_extract_string_offset_via_str_offsets(Dwarf_Debug dbg,
+    Dwarf_Small *data_ptr,
+    Dwarf_Small *end_data_ptr,
     Dwarf_Half   attrnum,
     Dwarf_Half   attrform,
     Dwarf_CU_Context cu_context,
@@ -716,14 +730,6 @@ int _dwarf_extract_address_from_debug_addr(Dwarf_Debug dbg,
     Dwarf_CU_Context context,
     Dwarf_Unsigned index,
     Dwarf_Addr *addr_out,
-    Dwarf_Error *error);
-
-int _dwarf_extract_string_offset_via_str_offsets(Dwarf_Debug dbg,
-    Dwarf_Small *info_data_ptr,
-    Dwarf_Half   attrnum,
-    Dwarf_Half   attrform,
-    Dwarf_CU_Context cu_context,
-    Dwarf_Unsigned *str_sect_offset_out,
     Dwarf_Error *error);
 
 int _dwarf_get_base_and_size_given_signature(Dwarf_CU_Context *context,
@@ -826,12 +832,22 @@ int _dwarf_file_name_is_full_path(Dwarf_Small  *fname);
 /*  This is an elf-only extension to get SHF_COMPRESSED flag from sh_flags.
     if pointer not set (which is normal for non-elf objects)
     it is fine.  */
-int (*_dwarf_get_elf_flags_func_ptr)(
+typedef int (*_dwarf_get_elf_flags_func_ptr_type)(
     void* obj_in,
     Dwarf_Half section_index,
     Dwarf_Unsigned *flags_out,
     Dwarf_Unsigned *addralign_out,
     int *error);
+extern _dwarf_get_elf_flags_func_ptr_type _dwarf_get_elf_flags_func_ptr;
+
+extern Dwarf_Bool _dwarf_allow_formudata(unsigned form);
+extern int _dwarf_formudata_internal(Dwarf_Debug dbg,
+    unsigned form,
+    Dwarf_Byte_Ptr data,
+    Dwarf_Byte_Ptr section_end,
+    Dwarf_Unsigned *return_uval,
+    Dwarf_Unsigned *bytes_read,
+    Dwarf_Error *error);
 
 Dwarf_Byte_Ptr _dwarf_calculate_info_section_start_ptr(Dwarf_CU_Context context, Dwarf_Unsigned *section_len_out);
 

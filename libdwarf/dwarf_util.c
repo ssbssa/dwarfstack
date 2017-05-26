@@ -167,7 +167,7 @@ _dwarf_get_size_of_val(Dwarf_Debug dbg,
         return DW_DLV_ERROR;
 
 
-    case 0:  return 0;
+    case 0:  return DW_DLV_OK;
     case DW_FORM_GNU_ref_alt:
     case DW_FORM_GNU_strp_alt:
     case DW_FORM_strp_sup:
@@ -202,21 +202,53 @@ _dwarf_get_size_of_val(Dwarf_Debug dbg,
         }
         return DW_DLV_OK;
 
-    case DW_FORM_block1:
-        *size_out =  *(Dwarf_Small *) val_ptr + 1;
+    case DW_FORM_block1: {
+        ptrdiff_t sizeasptrdiff = 0;
+
+        if (val_ptr >= section_end_ptr) {
+            _dwarf_error(dbg,error,DW_DLE_FORM_BLOCK_LENGTH_ERROR);
+            return DW_DLV_ERROR;
+        }
+        ret_value =  *(Dwarf_Small *) val_ptr;
+        sizeasptrdiff = (ptrdiff_t)ret_value;
+        if (sizeasptrdiff > (section_end_ptr - val_ptr) ||
+            sizeasptrdiff < 0) {
+            _dwarf_error(dbg,error,DW_DLE_FORM_BLOCK_LENGTH_ERROR);
+            return DW_DLV_ERROR;
+        }
+        *size_out = ret_value +1;
+        }
         return DW_DLV_OK;
 
-    case DW_FORM_block2:
+    case DW_FORM_block2: {
+        ptrdiff_t sizeasptrdiff = 0;
+
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
             val_ptr, sizeof(Dwarf_Half),error,section_end_ptr);
+        sizeasptrdiff = (ptrdiff_t)ret_value;
+        if (sizeasptrdiff > (section_end_ptr - val_ptr) ||
+            sizeasptrdiff < 0) {
+            _dwarf_error(dbg,error,DW_DLE_FORM_BLOCK_LENGTH_ERROR);
+            return DW_DLV_ERROR;
+        }
         *size_out = ret_value + sizeof(Dwarf_Half);
+        }
         return DW_DLV_OK;
 
-    case DW_FORM_block4:
+    case DW_FORM_block4: {
+        ptrdiff_t sizeasptrdiff = 0;
+
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
             val_ptr, sizeof(Dwarf_ufixed),
             error,section_end_ptr);
+        sizeasptrdiff = (ptrdiff_t)ret_value;
+        if (sizeasptrdiff > (section_end_ptr - val_ptr) ||
+            sizeasptrdiff < 0) {
+            _dwarf_error(dbg,error,DW_DLE_FORM_BLOCK_LENGTH_ERROR);
+            return DW_DLV_ERROR;
+        }
         *size_out = ret_value + sizeof(Dwarf_ufixed);
+        }
         return DW_DLV_OK;
 
     case DW_FORM_data1:
@@ -235,7 +267,17 @@ _dwarf_get_size_of_val(Dwarf_Debug dbg,
         *size_out = 8;
         return DW_DLV_OK;
 
-    case DW_FORM_string:
+    case DW_FORM_string: {
+        int res = 0;
+        res = _dwarf_check_string_valid(dbg,val_ptr,
+            val_ptr,
+            section_end_ptr,
+            DW_DLE_FORM_STRING_BAD_STRING,
+            error);
+        if ( res != DW_DLV_OK) {
+            return res;
+        }
+        }
         *size_out = strlen((char *) val_ptr) + 1;
         return DW_DLV_OK;
 
@@ -548,14 +590,20 @@ _dwarf_get_abbrev_for_code(Dwarf_CU_Context cu_context, Dwarf_Unsigned code,
             /*  ASSERT: size != 0 */
             end_abbrev_ptr = abbrev_ptr + size;
         } else {
-            end_abbrev_ptr = abbrev_ptr +
+            end_abbrev_ptr = dbg->de_debug_abbrev.dss_data +
                 dbg->de_debug_abbrev.dss_size;
         }
     }
 
     /*  End of abbrev's as we are past the end entirely.
-        This can happen. */
-    if (abbrev_ptr > end_abbrev_ptr) {
+        This can happen,though it seems wrong.
+        Or we are at the end of the data block,
+        which we also take as
+        meaning done with abbrevs for this CU. An abbreviations table
+        is supposed to end with a zero byte. Not ended by end
+        of data block.  But we are allowing what is possibly a bit
+        more flexible end policy here. */
+    if (abbrev_ptr >= end_abbrev_ptr) {
         return DW_DLV_NO_ENTRY;
     }
     /*  End of abbrev's for this cu, since abbrev code is 0. */
@@ -573,6 +621,11 @@ _dwarf_get_abbrev_for_code(Dwarf_CU_Context cu_context, Dwarf_Unsigned code,
             dbg,error,end_abbrev_ptr);
         DECODE_LEB128_UWORD_CK(abbrev_ptr, abbrev_tag,
             dbg,error,end_abbrev_ptr);
+
+        if (abbrev_ptr >= end_abbrev_ptr) {
+            _dwarf_error(dbg, error, DW_DLE_ABBREV_OFF_END);
+            return DW_DLV_ERROR;
+        }
 
         inner_list_entry = (Dwarf_Abbrev_List)
             _dwarf_get_alloc(cu_context->cc_dbg, DW_DLA_ABBREV_LIST, 1);
@@ -616,9 +669,14 @@ _dwarf_get_abbrev_for_code(Dwarf_CU_Context cu_context, Dwarf_Unsigned code,
             byte pair at end of list. So decrement. */
         inner_list_entry->abl_count = atcount-1;
 
-        /*  We may have fallen off the end of content,  that is not
-            a botch in the section, as there is no rule that the last
-            abbrev need have abbrev_code of 0. */
+        /*  The abbreviations table ends with an entry with a single
+            byte of zero for the abbreviation code.
+            Padding bytes following that zero are allowed, but
+            here we simply stop looking past that zero abbrev.
+
+            We also stop looking if the block/section ends,
+            though the DWARF2 and later standards do not specifically
+            allow section/block end to terminate an abbreviations list. */
 
     } while ((abbrev_ptr < end_abbrev_ptr) &&
         *abbrev_ptr != 0 && abbrev_code != code);
@@ -644,18 +702,19 @@ _dwarf_get_abbrev_for_code(Dwarf_CU_Context cu_context, Dwarf_Unsigned code,
 int
 _dwarf_check_string_valid(Dwarf_Debug dbg,void *areaptr,
     void *strptr, void *areaendptr,
+    int suggested_error,
     Dwarf_Error*error)
 {
-
     Dwarf_Small *start = areaptr;
     Dwarf_Small *p = strptr;
     Dwarf_Small *end = areaendptr;
+
     if (p < start) {
-        _dwarf_error(dbg,error,DW_DLE_DEBUG_STR_OFFSET_BAD);
+        _dwarf_error(dbg,error,suggested_error);
         return DW_DLV_ERROR;
     }
     if (p >= end) {
-        _dwarf_error(dbg,error,DW_DLE_DEBUG_STR_OFFSET_BAD);
+        _dwarf_error(dbg,error,suggested_error);
         return DW_DLV_ERROR;
     }
     if (dbg->de_assume_string_in_bounds) {
@@ -676,7 +735,13 @@ _dwarf_check_string_valid(Dwarf_Debug dbg,void *areaptr,
 
 /*  Return non-zero if the start/end are not valid for the
     die's section.
-    Return 0 if valid*/
+    If pastend matches the dss_data+dss_size then
+    pastend is a pointer that cannot be dereferenced.
+    But we allow it as valid here, it is normal for
+    a pointer to point one-past-end in
+    various circumstances (one must
+    avoid dereferencing it, of course).
+    Return 0 if valid. Return 1 if invalid. */
 int
 _dwarf_reference_outside_section(Dwarf_Die die,
     Dwarf_Small * startaddr,

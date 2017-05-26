@@ -581,7 +581,8 @@ dwarf_create_cie_from_after_start(Dwarf_Debug dbg,
     augmentation = frame_ptr;
 
     res = _dwarf_check_string_valid(dbg,section_pointer,
-        frame_ptr,section_ptr_end,error);
+        frame_ptr,section_ptr_end,
+        DW_DLE_AUGMENTATION_STRING_OFF_END,error);
     if (res != DW_DLV_OK) {
         return res;
     }
@@ -617,7 +618,7 @@ dwarf_create_cie_from_after_start(Dwarf_Debug dbg,
             }
             address_size = *((unsigned char *)frame_ptr);
             if (address_size  <  1) {
-                _dwarf_error(dbg, error, DW_DLE_ADDRESS_SIZE_ERROR);
+                _dwarf_error(dbg, error, DW_DLE_ADDRESS_SIZE_ZERO);
                 return (DW_DLV_ERROR);
             }
             if (address_size  > sizeof(Dwarf_Addr)) {

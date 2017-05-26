@@ -2,7 +2,7 @@
 
   Copyright (C) 2000,2002,2004 Silicon Graphics, Inc.  All Rights Reserved.
   Portions Copyright 2002-2010 Sun Microsystems, Inc. All rights reserved.
-  Portions Copyright 2011-2014 David Anderson. All Rights Reserved.
+  Portions Copyright 2011-2016 David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -132,13 +132,14 @@ typedef struct Dwarf_P_Per_Sect_String_Attrs_s *Dwarf_P_Per_Sect_String_Attrs;
 #define         DEBUG_VARNAMES  9
 #define         DEBUG_WEAKNAMES 10
 #define         DEBUG_MACINFO   11
-#define         DEBUG_LOC   12
-#define         DEBUG_RANGES 13
-#define         DEBUG_TYPES 14
-#define         DEBUG_PUBTYPES 15
+#define         DEBUG_LOC       12
+#define         DEBUG_RANGES    13
+#define         DEBUG_TYPES     14
+#define         DEBUG_PUBTYPES  15
+#define         DEBUG_NAMES     16 /* DWARF5 */
 
 /* Maximum number of debug_* sections not including the relocations */
-#define         NUM_DEBUG_SECTIONS      16
+#define         NUM_DEBUG_SECTIONS      17
 
 /*  Describes the data needed to generate line table header info
     so we can vary the init at runtime. */
@@ -194,6 +195,8 @@ struct Dwarf_P_Attribute_s {
     Dwarf_Unsigned ar_rel_symidx; /* when attribute has a
         relocatable value, holds
         index of symbol in SYMTAB */
+    Dwarf_Unsigned ar_debug_str_offset; /* Offset in .debug_str
+        if non-zero. Zero offset never assigned a string. */
     Dwarf_Ubyte ar_rel_type;  /* relocation type */
     Dwarf_Word ar_rel_offset; /* Offset of relocation within block */
     char ar_reloc_len; /* Number of bytes that relocation
@@ -335,6 +338,31 @@ struct Dwarf_P_Per_Sect_String_Attrs_s {
     Dwarf_P_String_Attr sect_sa_list;
 };
 
+struct Dwarf_P_debug_str_entry_s {
+    Dwarf_P_Debug  dse_dbg;
+    /*  Name used initially with tfind. */
+    char *dse_name;
+
+    Dwarf_Unsigned dse_slen; /* includes space for NUL terminator */
+
+    /*  See dse_has_table_offset below. */
+    Dwarf_Unsigned dse_table_offset;
+
+    /*  For tsearch a hash table exists and we have a table offset.
+        dse_dbg->de_debug_str->ds_data + dse_table_offset
+        points to the string iff dse_has_table_offset != 0. */
+    unsigned char  dse_has_table_offset;
+};
+
+struct Dwarf_P_Stats_s {
+    Dwarf_Unsigned ps_str_count;
+    Dwarf_Unsigned ps_str_total_length;
+    Dwarf_Unsigned ps_strp_count_debug_str;
+    Dwarf_Unsigned ps_strp_len_debug_str;
+    Dwarf_Unsigned ps_strp_reused_count;
+    Dwarf_Unsigned ps_strp_reused_len;
+};
+
 /* Fields used by producer */
 struct Dwarf_P_Debug_s {
     /*  Used to catch dso passing dbg to another DSO with incompatible
@@ -357,9 +385,14 @@ struct Dwarf_P_Debug_s {
     /*  Flags from producer_init call */
     Dwarf_Unsigned de_flags;
 
-    /*  This holds information on debug section stream output, including
+    /*  This holds information on debug info section stream output, including
         the stream data */
     Dwarf_P_Section_Data de_debug_sects;
+
+    /* .debug_str section data  */
+    Dwarf_P_Section_Data de_debug_str;
+    void *de_debug_str_hashtab; /* for tsearch */
+    int de_debug_default_str_form; /* Defaults set as DW_FORM_string */
 
     /*  Pointer to the 'current active' section */
     Dwarf_P_Section_Data de_current_active_section;
@@ -394,13 +427,12 @@ struct Dwarf_P_Debug_s {
     /* First die, leads to all others */
     Dwarf_P_Die de_dies;
 
-    /* Pointer to list of strings */
-    char *de_strings;
-
     /* Pointer to chain of aranges */
     Dwarf_P_Arange de_arange;
     Dwarf_P_Arange de_last_arange;
     Dwarf_Sword de_arange_count;
+
+    Dwarf_Ptr de_names;
 
     /* macinfo controls. */
     /* first points to beginning of the list during creation */
@@ -418,18 +450,20 @@ struct Dwarf_P_Debug_s {
         de_simple_name_headers[dwarf_snk_entrycount];
 
     /*  Relocation data. not all sections will actally have relocation
-        info, of course */
+        info, of course.  de_reloc_sect, de_elf_sects, and de_sect_name_idx
+        arrays are exactly in parallel. Not every de_elf_sect has
+        any relocations for it, of course. */
     struct Dwarf_P_Per_Reloc_Sect_s de_reloc_sect[NUM_DEBUG_SECTIONS];
     int de_reloc_next_to_return; /* iterator on reloc sections
         (SYMBOLIC output) */
 
-    /* used in remembering sections */
+    /*  Used in remembering sections. See de_reloc_sect above.  */
     int de_elf_sects[NUM_DEBUG_SECTIONS];  /* elf sect number of
         the section itself, DEBUG_LINE for example */
 
-    Dwarf_Unsigned de_sect_name_idx[NUM_DEBUG_SECTIONS]; /* section
-        name index or handle for the name of the symbol for
+    /*  Section name index or handle for the name of the symbol for
         DEBUG_LINE for example */
+    Dwarf_Unsigned de_sect_name_idx[NUM_DEBUG_SECTIONS];
 
     int de_offset_reloc; /* offset reloc type, R_MIPS_32 for
         example. Specific to the ABI being
@@ -465,8 +499,9 @@ struct Dwarf_P_Debug_s {
         offsets using dwarf2-99
         extension proposal */
 
-    int de_output_version; /* 2,3,4, or 5. The version number
-        of the output. (not necessarily that of each section). */
+    unsigned char de_output_version; /* 2,3,4, or 5. The version number
+        of the output. (not necessarily that of each section,
+        which depends on the base version). */
 
     int de_ar_data_attribute_form; /* data8, data4 abi &version dependent */
     int de_ar_ref_attr_form; /* ref8 ref4 , abi dependent */
@@ -498,6 +533,7 @@ struct Dwarf_P_Debug_s {
     struct Dwarf_P_Per_Sect_String_Attrs_s de_sect_string_attr[NUM_DEBUG_SECTIONS];
     /* Hold data needed to init new line output flexibly. */
     struct Dwarf_P_Line_Inits_s de_line_inits;
+    struct Dwarf_P_Stats_s de_stats;
 };
 
 #define CURRENT_VERSION_STAMP   2

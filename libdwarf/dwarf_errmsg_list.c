@@ -29,7 +29,9 @@
 #include "config.h"
 #include "dwarf_incl.h"
 #include <stdio.h>
-#include <stdlib.h>  /* For exit() declaration etc. */
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>  /* For exit(), strtoul() declaration etc. */
+#endif
 #endif  /* TESTING */
 
 /* Array to hold string representation of errors. Any time a
@@ -54,7 +56,7 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_IOF (7) I/O failure ",
     "DW_DLE_MAF (8) memory allocation failure ",
     "DW_DLE_IA (9) invalid argument ",
-    "DW_DLE_MDE (10) mangled debugging entry ",
+    "DW_DLE_MDE (10) mangled debugging entry:libelf detected error",
     "DW_DLE_MLE (11) mangled line number entry ",
     "DW_DLE_FNO (12) file not open ",
     "DW_DLE_FNR (13) file not a regular file ",
@@ -119,7 +121,7 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_CU_LENGTH_ERROR (47)",
     "DW_DLE_VERSION_STAMP_ERROR (48)",
     "DW_DLE_ABBREV_OFFSET_ERROR (49)",
-    "DW_DLE_ADDRESS_SIZE_ERROR (50) Either too large or zero",
+    "DW_DLE_ADDRESS_SIZE_ERROR (50) size too large",
     "DW_DLE_DEBUG_INFO_PTR_NULL (51)",
     "DW_DLE_DIE_NULL (52)",
     "DW_DLE_STRING_OFFSET_BAD (53)",
@@ -258,11 +260,11 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_MACINFO_INTERNAL_ERROR_SPACE (179)",
     "DW_DLE_MACINFO_MALLOC_FAIL (180)",
     "DW_DLE_DEBUGMACINFO_ERROR (181)",
-    "DW_DLE_DEBUG_MACRO_LENGTH_BAD (182)",
-    "DW_DLE_DEBUG_MACRO_MAX_BAD (183)",
-    "DW_DLE_DEBUG_MACRO_INTERNAL_ERR (184)",
-    "DW_DLE_DEBUG_MACRO_MALLOC_SPACE (185)",
-    "DW_DLE_DEBUG_MACRO_INCONSISTENT (186)",
+    "DW_DLE_DEBUG_MACRO_LENGTH_BAD (182) in .debug_macinfo",
+    "DW_DLE_DEBUG_MACRO_MAX_BAD (183) in .debug_macinfo",
+    "DW_DLE_DEBUG_MACRO_INTERNAL_ERR (184) in .debug_macinfo",
+    "DW_DLE_DEBUG_MACRO_MALLOC_SPACE (185) in .debug_macinfo",
+    "DW_DLE_DEBUG_MACRO_INCONSISTENT (186) in .debug_macinfo",
     "DW_DLE_DF_NO_CIE_AUGMENTATION(187)",
     "DW_DLE_DF_REG_NUM_TOO_HIGH(188)",
     "DW_DLE_DF_MAKE_INSTR_NO_INIT(189)",
@@ -424,6 +426,40 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_ERRONEOUS_XU_INDEX_SECTION(345) XU means cu_ or tu_ index",
     "DW_DLE_DIRECTORY_FORMAT_COUNT_VS_DIRECTORIES_MISMATCH(346) Inconsistent line table, corrupted.",
     "DW_DLE_COMPRESSED_EMPTY_SECTION(347) corrupt section data",
+    "DW_DLE_SIZE_WRAPAROUND(348) Impossible string length",
+    "DW_DLE_ILLOGICAL_TSEARCH(349) Impossible sitauation. Corrupted data?",
+    "DW_DLE_BAD_STRING_FORM(350) Not a currently allowed form",
+    "DW_DLE_DEBUGSTR_ERROR(351) problem generating .debug_str section",
+    "DW_DLE_DEBUGSTR_UNEXPECTED_REL(352) string relocation will be wrong.",
+    "DW_DLE_DISCR_ARRAY_ERROR(353) Internal error in dwarf_discr_list()",
+    "DW_DLE_LEB_OUT_ERROR(354) Insufficient buffer to turn integer to leb",
+    "DW_DLE_SIBLING_LIST_IMPROPER(355) Corrupt dwarf",
+    "DW_DLE_LOCLIST_OFFSET_BAD(356) Corrupt dwarf",
+    "DW_DLE_LINE_TABLE_BAD(357) Corrupt line table",
+    "DW_DLE_DEBUG_LOClISTS_DUPLICATE(358)",
+    "DW_DLE_DEBUG_RNGLISTS_DUPLICATE(359)",
+    "DW_DLE_ABBREV_OFF_END(360)",
+    "DW_DLE_FORM_STRING_BAD_STRING(361) string runs off end of data",
+    "DW_DLE_AUGMENTATION_STRING_OFF_END(362) augmenation runs off of its section",
+    "DW_DLE_STRING_OFF_END_PUBNAMES_LIKE(363) one of the global sections, string bad",
+    "DW_DLE_LINE_STRING_BAD(364)  runs off end of line data",
+    "DW_DLE_DEFINE_FILE_STRING_BAD(365) runs off end of section",
+    "DW_DLE_MACRO_STRING_BAD(366) DWARF5 macro def/undef string runs off section data",
+    "DW_DLE_MACINFO_STRING_BAD(367) DWARF2..4 macro def/undef string runs off section data",
+    "DW_DLE_ZLIB_UNCOMPRESS_ERROR(368) Surely an invalid uncompress length",
+    "DW_DLE_IMPROPER_DWO_ID(369)",
+    "DW_DLE_GROUPNUMBER_ERROR(370) An error determining default target group number",
+    "DW_DLE_ADDRESS_SIZE_ZERO(371)",
+    "DW_DLE_DEBUG_NAMES_HEADER_ERROR(372)",
+    "DW_DLE_DEBUG_NAMES_AUG_STRING_ERROR(373) corrupt dwarf",
+    "DW_DLE_DEBUG_NAMES_PAD_NON_ZERO(374) corrupt dwarf",
+    "DW_DLE_DEBUG_NAMES_OFF_END(375) corrupt dwarf",
+    "DW_DLE_DEBUG_NAMES_ABBREV_OVERFLOW(376) Surprising overrun of fixed size array",
+    "DW_DLE_DEBUG_NAMES_ABBREV_CORRUPTION(377)",
+    "DW_DLE_DEBUG_NAMES_NULL_POINTER(378) null argument",
+    "DW_DLE_DEBUG_NAMES_BAD_INDEX_ARG(379) index outside valid range",
+    "DW_DLE_DEBUG_NAMES_ENTRYPOOL_OFFSET(380) offset outside entrypool",
+    "DW_DLE_DEBUG_NAMES_UNHANDLED_FORM(381) Might be corrupt dwarf or incomplete DWARF support",
 };
 
 #ifdef TESTING
@@ -490,11 +526,160 @@ check_errnum_mismatches(unsigned i)
     return TRUE;
 }
 
+/* We don't allow arbitrary DW_DLE line length. */
+#define MAXDEFINELINE 200
+
+static int
+splmatches(char *base, unsigned baselen,char *test)
+{
+    if (baselen != strlen(test) ) {
+        return FALSE;
+    }
+    for ( ; *test; ++test,++base) {
+        if (*test != *base) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static void
+check_dle_list(const char *path)
+{
+    /*  The format should be
+        #define<space>name<spaces>number<spaces>optional-c-comment
+        and we are intentionally quite rigid about it all except
+        that the number of spaces before any comment is allowed. */
+    char buffer[MAXDEFINELINE];
+    unsigned linenum = 0;
+    unsigned long prevdefval = 0;
+    unsigned foundlast = 0;
+    unsigned foundlouser = 0;
+    FILE*fin = 0;
+
+    fin = fopen(path, "r");
+    if(!fin) {
+        printf("Unable to open define list %s\n",path);
+        exit(1);
+    }
+    for(;;++linenum) {
+        char *line = 0;
+        unsigned linelen = 0;
+        char *  curdefname = 0;
+        char *  pastname = 0;
+        unsigned curdefname_len = 0;
+        char *numstart = 0;
+        char * endptr = 0;
+        unsigned long v = 0;
+
+        line = fgets(buffer,MAXDEFINELINE,fin);
+        if(!line) {
+            break;
+        }
+        linelen = strlen(line);
+        if (linelen >= (unsigned)(MAXDEFINELINE-1)) {
+            printf("define line %u is too long!\n",linenum);
+            exit(1);
+        }
+        if(strncmp(line,"#define DW_DLE_",15)) {
+            printf("define line %u has wrong leading chars!\n",linenum);
+            exit(1);
+        }
+        curdefname = line+8;
+        /* ASSERT: line ends with NUL byte. */
+        for( ; ; curdefname_len++) {
+            if (foundlouser) {
+                printf("define line %u has  stuff after DW_DLE_LO_USER!\n",
+                    linenum);
+                exit(1);
+            }
+            pastname = curdefname +curdefname_len;
+            if (!*pastname) {
+                /* At end of line. Missing value. */
+                printf("define line %u has no number value!\n",linenum);
+                exit(1);
+            }
+            if (*pastname == ' ') {
+                /* Ok. Now look for value. */
+                numstart = pastname + 1;
+                break;
+            }
+        }
+        /* strtoul skips leading whitespace. */
+        v = strtoul(numstart,&endptr,0);
+        /*  This test is a bit odd. But is valid till
+            we decide it is inappropriate. */
+        if (v > DW_DLE_LO_USER) {
+            printf("define line %u: number value unreasonable. %lu\n",
+                linenum,v);
+            exit(1);
+        }
+        if (v == 0 && endptr == numstart) {
+            printf("define line %u: number value missing.\n",
+                linenum);
+            exit(1);
+        }
+        if (*endptr != ' ' && *endptr != '\n') {
+            printf("define line %u: number value terminates oddly\n",
+                linenum);
+            exit(1);
+        }
+        if (splmatches(curdefname,curdefname_len,"DW_DLE_LAST")) {
+            if (foundlast) {
+                printf("duplicated DW_DLE_LAST! line %u\n",linenum);
+                exit(1);
+            }
+            foundlast = 1;
+            if (v != prevdefval) {
+                printf("Invalid: Last value mismatch! %lu vs %lu\n",
+                    v,prevdefval);
+            }
+        } else if (splmatches(curdefname,curdefname_len,"DW_DLE_LO_USER")) {
+            if (!foundlast) {
+                printf("error:expected DW_DLE_LO_USER after LAST! line %u\n",
+                    linenum);
+                exit(1);
+            }
+            if (foundlouser) {
+                printf("Error:duplicated DW_DLE_LO_USER! line %u\n",
+                    linenum);
+                exit(1);
+            }
+            foundlouser = 1;
+            continue;
+        } else {
+            if (linenum > 0) {
+                if (v != prevdefval+1) {
+                    printf("Invalid: Missing value! %lu vs %lu\n",
+                        prevdefval,v);
+                    exit(1);
+                }
+            }
+            prevdefval = v;
+        }
+        /* Ignoring rest of line for now. */
+    }
+    fclose(fin);
+}
+
 int
-main()
+main(int argc, char **argv)
 {
     unsigned arraysize = sizeof(_dwarf_errmsgs) / sizeof(char *);
     unsigned i = 0;
+    const char *path = 0;
+
+    if (argc != 3) {
+        printf("Expected -f <filename> of DW_DLE lines from libdwarf.h");
+        exit(1);
+    }
+    if (strcmp(argv[1],"-f")) {
+        printf("Expected -f");
+        exit(1);
+    }
+    path = argv[2];
+    check_dle_list(path);
+
 
     if (arraysize != (DW_DLE_LAST + 1)) {
         printf("Missing or extra entry in dwarf error strings array"

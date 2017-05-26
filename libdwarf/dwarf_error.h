@@ -30,6 +30,9 @@
 void _dwarf_error(Dwarf_Debug dbg, Dwarf_Error * error,
     Dwarf_Sword errval);
 
+#define DE_STANDARD 0 /* Normal alloc attached to dbg. */
+#define DE_STATIC 1   /* Using global static var */
+#define DE_MALLOC 2   /* Using malloc space */
 struct Dwarf_Error_s {
     Dwarf_Sword er_errval;
 

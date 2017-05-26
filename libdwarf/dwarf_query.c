@@ -1,7 +1,7 @@
 /*
 
   Copyright (C) 2000,2002,2004 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2007-2016 David Anderson. All Rights Reserved.
+  Portions Copyright (C) 2007-2017 David Anderson. All Rights Reserved.
   Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
@@ -361,7 +361,7 @@ dwarf_attrlist(Dwarf_Die die,
                 (Dwarf_Attribute) _dwarf_get_alloc(dbg, DW_DLA_ATTR, 1);
             if (new_attr == NULL) {
                 _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-                return (DW_DLV_ERROR);
+                return DW_DLV_ERROR;
             }
 
             new_attr->ar_attribute = attr;
@@ -375,9 +375,13 @@ dwarf_attrlist(Dwarf_Die die,
                 attr_form = (Dwarf_Half) utmp6;
                 new_attr->ar_attribute_form = attr_form;
             }
+            /*  Here the final address must be *inside* the section, as we
+                will read from there, and read at least one byte, we think.
+                We do not want info_ptr to point past end so we add 1 to
+                the end-pointer.  */
             if (_dwarf_reference_outside_section(die,
                 (Dwarf_Small*) info_ptr,
-                (Dwarf_Small*) info_ptr)) {
+                ((Dwarf_Small*) info_ptr )+1)) {
                 _dwarf_error(dbg, error,DW_DLE_ATTR_OUTSIDE_SECTION);
                 return DW_DLV_ERROR;
             }
@@ -884,6 +888,7 @@ dwarf_dietype_offset(Dwarf_Die die,
     res = dwarf_attr(die,DW_AT_type,&attr,error);
     if (res == DW_DLV_OK) {
         res = dwarf_global_formref(attr,&offset,error);
+        dwarf_dealloc(die->di_cu_context->cc_dbg,attr,DW_DLA_ATTR);
     }
     *return_off = offset;
     return res;
@@ -899,7 +904,6 @@ _dwarf_get_string_base_attr_value(Dwarf_Debug dbg,
 {
     int res = 0;
     Dwarf_Die cudie = 0;
-    Dwarf_Small *cu_die_dataptr = 0;
     Dwarf_Unsigned cu_die_offset = 0;
     Dwarf_Attribute myattr = 0;
 
@@ -909,12 +913,6 @@ _dwarf_get_string_base_attr_value(Dwarf_Debug dbg,
     }
     cu_die_offset = context->cc_cu_die_global_sec_offset;
     context->cc_cu_die_offset_present  = TRUE;
-    if(!cu_die_dataptr) {
-        _dwarf_error(dbg, error,
-            DW_DLE_DEBUG_CU_UNAVAILABLE_FOR_FORM);
-        return (DW_DLV_ERROR);
-
-    }
     res = dwarf_offdie_b(dbg,cu_die_offset,
         context->cc_is_info,
         &cudie,
@@ -1551,15 +1549,32 @@ dwarf_die_abbrev_children_flag(Dwarf_Die die,Dwarf_Half *ab_has_child)
 
 /* Helper function for finding form class. */
 static enum Dwarf_Form_Class
-dw_get_special_offset(Dwarf_Half attrnum)
+dw_get_special_offset(Dwarf_Half attrnum,
+    Dwarf_Half dwversion)
 {
     switch (attrnum) {
     case DW_AT_stmt_list:
         return DW_FORM_CLASS_LINEPTR;
-    case DW_AT_macro_info:
+    case DW_AT_macro_info: /* DWARF2-DWARF4 */
         return DW_FORM_CLASS_MACPTR;
-    case DW_AT_ranges:
-        return DW_FORM_CLASS_RANGELISTPTR;
+    case DW_AT_start_scope:
+    case DW_AT_ranges: {
+        if (dwversion <= 4) {
+            return DW_FORM_CLASS_RANGELISTPTR;
+        }
+        return DW_FORM_CLASS_RNGLIST;
+        }
+    case DW_AT_ranges_base: /* DWARF5 */
+        return DW_FORM_CLASS_RNGLISTSPTR;
+    case DW_AT_macros:        /* DWARF5 */
+        return DW_FORM_CLASS_MACROPTR;
+    case DW_AT_loclists_base: /* DWARF5 */
+        return DW_FORM_CLASS_LOCLISTSPTR;
+    case DW_AT_addr_base:     /* DWARF5 */
+        return DW_FORM_CLASS_ADDRPTR;
+    case DW_AT_str_offsets_base: /* DWARF5 */
+        return DW_FORM_CLASS_STROFFSETSPTR;
+
     case DW_AT_location:
     case DW_AT_string_length:
     case DW_AT_return_addr:
@@ -1568,8 +1583,12 @@ dw_get_special_offset(Dwarf_Half attrnum)
     case DW_AT_segment:
     case DW_AT_static_link:
     case DW_AT_use_location:
-    case DW_AT_vtable_elem_location:
-        return DW_FORM_CLASS_LOCLISTPTR;
+    case DW_AT_vtable_elem_location: {
+        if (dwversion <= 4) {
+            return DW_FORM_CLASS_LOCLISTPTR;
+        }
+        return DW_FORM_CLASS_LOCLIST;
+        }
     case DW_AT_sibling:
     case DW_AT_byte_size :
     case DW_AT_bit_offset :
@@ -1617,13 +1636,13 @@ dwarf_get_form_class(
     Dwarf_Half form)
 {
     switch (form) {
-    case  DW_FORM_addr: return DW_FORM_CLASS_ADDRESS;
-
+    case  DW_FORM_addr:  return DW_FORM_CLASS_ADDRESS;
     case  DW_FORM_data2:  return DW_FORM_CLASS_CONSTANT;
 
     case  DW_FORM_data4:
         if (dwversion <= 3 && offset_size == 4) {
-            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum);
+            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum,
+                dwversion);
             if (class != DW_FORM_CLASS_UNKNOWN) {
                 return class;
             }
@@ -1631,16 +1650,17 @@ dwarf_get_form_class(
         return DW_FORM_CLASS_CONSTANT;
     case  DW_FORM_data8:
         if (dwversion <= 3 && offset_size == 8) {
-            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum);
+            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum,
+                dwversion);
             if (class != DW_FORM_CLASS_UNKNOWN) {
                 return class;
             }
         }
         return DW_FORM_CLASS_CONSTANT;
-
     case  DW_FORM_sec_offset:
         {
-            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum);
+            enum Dwarf_Form_Class class = dw_get_special_offset(attrnum,
+                dwversion);
             if (class != DW_FORM_CLASS_UNKNOWN) {
                 return class;
             }
@@ -1675,12 +1695,16 @@ dwarf_get_form_class(
 
     case  DW_FORM_addrx:           return DW_FORM_CLASS_ADDRESS; /* DWARF5 */
     case  DW_FORM_GNU_addr_index:  return DW_FORM_CLASS_ADDRESS;
-    case  DW_FORM_strx:            return DW_FORM_CLASS_STRING; /* DWARF5 */
+    case  DW_FORM_strx:            return DW_FORM_CLASS_STRING;  /* DWARF5 */
     case  DW_FORM_GNU_str_index:   return DW_FORM_CLASS_STRING;
+
+    case  DW_FORM_rnglistx:     return DW_FORM_CLASS_RNGLIST;    /* DWARF5 */
+    case  DW_FORM_loclistx:     return DW_FORM_CLASS_LOCLIST;    /* DWARF5 */
 
     case  DW_FORM_GNU_ref_alt:  return DW_FORM_CLASS_REFERENCE;
     case  DW_FORM_GNU_strp_alt: return DW_FORM_CLASS_STRING;
-    case  DW_FORM_strp_sup:     return DW_FORM_CLASS_STRING; /* DWARF5 */
+    case  DW_FORM_strp_sup:     return DW_FORM_CLASS_STRING;    /* DWARF5 */
+    case  DW_FORM_implicit_const: return DW_FORM_CLASS_CONSTANT; /* DWARF5 */
 
     case  DW_FORM_indirect:
     default:

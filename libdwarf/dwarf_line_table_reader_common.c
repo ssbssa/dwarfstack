@@ -380,7 +380,8 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,
             line_context->lc_include_directories[directories_count] =
                 line_ptr;
             res = _dwarf_check_string_valid(dbg,
-                data_start,line_ptr,line_ptr_end,err);
+                data_start,line_ptr,line_ptr_end,
+                DW_DLE_LINE_STRING_BAD,err);
             if (res != DW_DLV_OK) {
                 return res;
             }
@@ -429,7 +430,8 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,
 
             currfile->fi_file_name = line_ptr;
             resl = _dwarf_check_string_valid(dbg,
-                data_start,line_ptr,line_ptr_end,err);
+                data_start,line_ptr,line_ptr_end,
+                DW_DLE_LINE_STRING_BAD,err);
             if (resl != DW_DLV_OK) {
                 return resl;
             }
@@ -762,7 +764,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,
                 line_context->lc_subprogs + i;
             for (j = 0; j < subprog_format_count; j++) {
                 switch (subprog_entry_types[j]) {
-                case DW_LNCT_subprogram_name:
+                case DW_LNCT_GNU_subprogram_name:
                     res = _dwarf_decode_line_string_form(dbg,
                         subprog_entry_forms[j],
                         local_length_size,
@@ -776,7 +778,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,
                         return res;
                     }
                     break;
-                case DW_LNCT_decl_file:
+                case DW_LNCT_GNU_decl_file:
                     res = _dwarf_decode_line_udata_form(dbg,
                         subprog_entry_forms[j],
                         &line_ptr,
@@ -789,7 +791,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,
                         return res;
                     }
                     break;
-                case DW_LNCT_decl_line:
+                case DW_LNCT_GNU_decl_line:
                     res = _dwarf_decode_line_udata_form(dbg,
                         subprog_entry_forms[j],
                         &line_ptr,
@@ -1250,6 +1252,11 @@ read_line_table_program(Dwarf_Debug dbg,
                 READ_UNALIGNED_CK(dbg, fixed_advance_pc, Dwarf_Half,
                     line_ptr, sizeof(Dwarf_Half),error,line_ptr_end);
                 line_ptr += sizeof(Dwarf_Half);
+                if (line_ptr > line_ptr_end) {
+                    _dwarf_error(dbg, error,
+                        DW_DLE_LINE_TABLE_BAD);
+                    return DW_DLV_ERROR;
+                }
                 regs.lr_address = regs.lr_address + fixed_advance_pc;
                 regs.lr_op_index = 0;
 #ifdef PRINTING_DETAILS
@@ -1430,8 +1437,18 @@ read_line_table_program(Dwarf_Debug dbg,
             /*  Dwarf_Small is a ubyte and the extended opcode is a
                 ubyte, though not stated as clearly in the 2.0.0 spec as
                 one might hope. */
+            if (line_ptr >= line_ptr_end) {
+                _dwarf_error(dbg, error,
+                    DW_DLE_LINE_TABLE_BAD);
+                return DW_DLV_ERROR;
+            }
             ext_opcode = *(Dwarf_Small *) line_ptr;
             line_ptr++;
+            if (line_ptr > line_ptr_end) {
+                _dwarf_error(dbg, error,
+                    DW_DLE_LINE_TABLE_BAD);
+                return DW_DLV_ERROR;
+            }
             switch (ext_opcode) {
 
             case DW_LNE_end_sequence:{
@@ -1536,6 +1553,11 @@ read_line_table_program(Dwarf_Debug dbg,
                 }
                 regs.lr_op_index = 0;
                 line_ptr += address_size;
+                if (line_ptr > line_ptr_end) {
+                    _dwarf_error(dbg, error,
+                        DW_DLE_LINE_TABLE_BAD);
+                    return DW_DLV_ERROR;
+                }
                 }
                 break;
 
@@ -1553,12 +1575,18 @@ read_line_table_program(Dwarf_Debug dbg,
                     _dwarf_add_to_files_list(line_context,cur_file_entry);
                     cur_file_entry->fi_file_name = (Dwarf_Small *) line_ptr;
                     res = _dwarf_check_string_valid(dbg,
-                        line_ptr,line_ptr,line_ptr_end,error);
+                        line_ptr,line_ptr,line_ptr_end,
+                        DW_DLE_DEFINE_FILE_STRING_BAD,error);
                     if (res != DW_DLV_OK) {
                         _dwarf_free_chain_entries(dbg,head_chain,line_count);
                         return res;
                     }
                     line_ptr = line_ptr + strlen((char *) line_ptr) + 1;
+                    if (line_ptr >= line_ptr_end) {
+                        _dwarf_error(dbg, error,
+                            DW_DLE_LINE_TABLE_BAD);
+                        return DW_DLV_ERROR;
+                    }
 
                     DECODE_LEB128_UWORD_CK(line_ptr,value,
                         dbg,error,line_ptr_end);
@@ -1612,7 +1640,7 @@ read_line_table_program(Dwarf_Debug dbg,
                 if (instr_length < 1 || remaining_bytes > DW_LNE_LEN_MAX) {
                     _dwarf_free_chain_entries(dbg,head_chain,line_count);
                     _dwarf_error(dbg, error,
-                        DW_DLE_LINE_EXT_OPCODE_BAD);
+                        DW_DLE_LINE_TABLE_BAD);
                     return (DW_DLV_ERROR);
                 }
 
@@ -1628,11 +1656,20 @@ read_line_table_program(Dwarf_Debug dbg,
                         dwarf_printf(dbg,
                             "%02x",(unsigned char)(*(line_ptr)));
                         line_ptr++;
+                        if (line_ptr > line_ptr_end) {
+                            _dwarf_error(dbg, error,
+                                DW_DLE_LINE_TABLE_BAD);
+                            return (DW_DLV_ERROR);
+                        }
                         remaining_bytes--;
                     }
                 }
 #else /* ! PRINTING_DETAILS */
                 line_ptr += remaining_bytes;
+                if (line_ptr > line_ptr_end) {
+                    _dwarf_error(dbg, error, DW_DLE_LINE_TABLE_BAD);
+                    return (DW_DLV_ERROR);
+                }
 #endif /* PRINTING_DETAILS */
                 dwarf_printf(dbg,"\n");
                 }

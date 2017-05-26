@@ -52,6 +52,8 @@
 #include "dwarf_gdbindex.h"
 #include "dwarf_xu_index.h"
 #include "dwarf_macro5.h"
+#include "dwarf_dnames.h"
+#include "dwarf_dsc.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -150,7 +152,7 @@ struct ial_s alloc_instance_basics[ALLOC_AREA_INDEX_TABLE_MAX] = {
     /* 20 DW_DLA_CIE */
     {sizeof(struct Dwarf_Cie_s),MULTIPLY_NO,  0, 0},
 
-    {sizeof(struct Dwarf_Fde_s),MULTIPLY_NO,  0, 
+    {sizeof(struct Dwarf_Fde_s),MULTIPLY_NO,  0,
         _dwarf_fde_destructor},/* 21 DW_DLA_FDE */
     {sizeof(Dwarf_Loc),MULTIPLY_CT, 0, 0},          /* 22 DW_DLA_LOC_BLOCK */
     {sizeof(Dwarf_Frame_Op),MULTIPLY_CT, 0, 0},     /* 23 DW_DLA_FRAME_BLOCK */
@@ -265,6 +267,12 @@ struct ial_s alloc_instance_basics[ALLOC_AREA_INDEX_TABLE_MAX] = {
 
     /* 61 DW_DLA_CHAIN_2 */
     {sizeof(struct Dwarf_Chain_o),MULTIPLY_NO, 0, 0},
+    /* 62 DW_DLA_DSC_HEAD 0x3e */
+    {sizeof(struct Dwarf_Dsc_Head_s),MULTIPLY_NO, 0,
+        _dwarf_dsc_destructor},
+    /* 63 DW_DLA_DNAMES_HEAD 0x3f */
+    {sizeof(struct Dwarf_Dnames_Head_s),MULTIPLY_NO, 0,
+        _dwarf_debugnames_destructor},
 };
 
 /*  We are simply using the incoming pointer as the key-pointer.
@@ -472,6 +480,44 @@ dwarf_dealloc(Dwarf_Debug dbg,
     if (space == NULL) {
         return;
     }
+    if (dbg) {
+        /*  If it's a string in debug_info etc doing
+            (char *)space - DW_RESERVE is totally bogus. */
+        if (alloc_type == DW_DLA_STRING &&
+            string_is_in_debug_section(dbg,space)) {
+            /*  A string pointer may point into .debug_info or
+                .debug_string etc.
+                So must not be freed.  And strings have no need of a
+                specialdestructor().
+                Mostly a historical mistake here. */
+            return;
+        }
+        /*  Otherwise it might be allocated string so it is ok
+            do the (char *)space - DW_RESERVE  */
+    } else {
+        /*  App error, or an app that failed to succeed in a
+            dwarf_init() call. */
+        return;
+    }
+    if (alloc_type == DW_DLA_ERROR) {
+        Dwarf_Error ep = (Dwarf_Error)space;
+        if (ep->er_static_alloc == DE_STATIC) {
+            /*  This is special, malloc arena
+                was exhausted or a NULL dbg
+                was used for the error because the real
+                dbg was unavailable. There is nothing to delete, really.
+                Set er_errval to signal that the space was dealloc'd. */
+            _dwarf_failsafe_error.er_errval = DW_DLE_FAILSAFE_ERRVAL;
+            return;
+        }
+        if (ep->er_static_alloc == DE_MALLOC) {
+            /*  This is special, we had no arena
+                so just malloc'd a Dwarf_Error_s. */
+            free(space);
+            return;
+        }
+        /* Was normal alloc, use normal dealloc. */
+    }
     type = alloc_type;
     malloc_addr = (char *)space - DW_RESERVE;
     r =(struct reserve_data_s *)malloc_addr;
@@ -480,34 +526,11 @@ dwarf_dealloc(Dwarf_Debug dbg,
             to crash. */
         return;
     }
-    if (alloc_type == DW_DLA_ERROR) {
-        Dwarf_Error ep = (Dwarf_Error)space;
-        if (ep->er_static_alloc) {
-            /*  This is special, malloc arena
-                was exhausted and there is nothing to delete, really.
-                Set er_errval to signal that the space was dealloc'd. */
-            ep->er_errval = DW_DLE_FAILSAFE_ERRVAL;
-            return;
-        }
-    }
-    if (dbg == NULL) {
-        /*  App error, or an app that failed to succeed in a
-            dwarf_init() call. */
-        return;
-    }
     if (type >= ALLOC_AREA_INDEX_TABLE_MAX) {
         /* internal or user app error */
         return;
     }
 
-
-    if (type == DW_DLA_STRING && string_is_in_debug_section(dbg,space)) {
-        /*  A string pointer may point into .debug_info or .debug_string etc.
-            So must not be freed.  And strings have no need of a
-            specialdestructor().
-            Mostly a historical mistake here. */
-        return;
-    }
 
     if (alloc_instance_basics[type].specialdestructor) {
         alloc_instance_basics[type].specialdestructor(space);
@@ -682,12 +705,15 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)
 struct Dwarf_Error_s *
 _dwarf_special_no_dbg_error_malloc(void)
 {
+    Dwarf_Error e = 0;
     /* The union unused things are to guarantee proper alignment */
     char *mem = malloc(sizeof(struct Dwarf_Error_s));
     if (mem == 0) {
         return 0;
     }
     memset(mem, 0, sizeof(struct Dwarf_Error_s));
-    return (struct Dwarf_Error_s *) mem;
+    e = (Dwarf_Error)mem;
+    e->er_static_alloc = DE_MALLOC;
+    return e;
 }
 

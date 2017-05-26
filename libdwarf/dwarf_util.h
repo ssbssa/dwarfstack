@@ -68,14 +68,6 @@
         leblen = lu_leblen;                          \
     } while (0)
 
-#define DECODE_LEB128_UWORD(ptr, value)               \
-    do {                                             \
-        Dwarf_Word uleblen;                           \
-        value = _dwarf_decode_u_leb128(ptr,&uleblen); \
-        ptr += uleblen;                              \
-    } while (0)
-
-
 /*
     Decodes signed leb128 encoded numbers.
     Make sure ptr is a pointer to a 1-byte type.
@@ -84,12 +76,6 @@
     not work correctly if Dwarf_Word was 64 bits.
 
 */
-#define DECODE_LEB128_SWORD(ptr, value)               \
-    do {                                              \
-        Dwarf_Word sleblen = 0;                       \
-        value = _dwarf_decode_s_leb128(ptr,&sleblen); \
-        ptr += sleblen;                               \
-    } while (0)
 #define DECODE_LEB128_SWORD_CK(ptr, value,dbg,errptr,endptr) \
     do {                                              \
         Dwarf_Word uleblen = 0;                       \
@@ -127,19 +113,7 @@
 
     These seem bogus as they assume 4 bytes get a 4 byte
     word. Wrong. FIXME
-*/
-#define SKIP_LEB128_WORD(ptr)                     \
-    do {                                          \
-        if ((*(ptr++) & 0x80) != 0) {             \
-            if ((*(ptr++) & 0x80) != 0) {         \
-                if ((*(ptr++) & 0x80) != 0) {     \
-                    ptr++;                        \
-                }                                 \
-            }                                     \
-        }                                         \
-    } while (0)
 
-/*
     'return' only in case of error
     else falls through.
 */
@@ -333,48 +307,6 @@ typedef Dwarf_Unsigned BIGGEST_UINT;
     does not seem necessary (none of the 64bit length seems
     appropriate unless it's  ident[EI_CLASS] == ELFCLASS64).
 */
-#if 0
-#define READ_AREA_LENGTH(r_dbg,w_target,r_targtype,                      \
-    rw_src_data_p,w_length_size,w_exten_size)                            \
-    do {                                                                 \
-        READ_UNALIGNED(r_dbg,w_target,r_targtype,                        \
-        rw_src_data_p, ORIGINAL_DWARF_OFFSET_SIZE);                      \
-        if (w_target == DISTINGUISHED_VALUE) {                           \
-            /* dwarf3 64bit extension */                                 \
-            w_length_size  = DISTINGUISHED_VALUE_OFFSET_SIZE;            \
-            rw_src_data_p += ORIGINAL_DWARF_OFFSET_SIZE;                 \
-            w_exten_size   = ORIGINAL_DWARF_OFFSET_SIZE;                 \
-            READ_UNALIGNED(r_dbg,w_target,r_targtype,                    \
-                rw_src_data_p, DISTINGUISHED_VALUE_OFFSET_SIZE);         \
-            rw_src_data_p += DISTINGUISHED_VALUE_OFFSET_SIZE;            \
-        } else {                                                         \
-            if (w_target == 0 && r_dbg->de_big_endian_object) {          \
-                /* Might be IRIX: We have to distinguish between   */    \
-                /* 32-bit DWARF format and IRIX 64-bit DWARF format. */  \
-                if (r_dbg->de_length_size == 8) {                        \
-                    /* IRIX 64 bit, big endian.  This test */            \
-                    /* is not a truly precise test, a precise test */    \
-                    /* would check if the target was IRIX.  */           \
-                    READ_UNALIGNED(r_dbg,w_target,r_targtype,            \
-                        rw_src_data_p, DISTINGUISHED_VALUE_OFFSET_SIZE); \
-                    w_length_size  = DISTINGUISHED_VALUE_OFFSET_SIZE;    \
-                    rw_src_data_p += DISTINGUISHED_VALUE_OFFSET_SIZE;    \
-                    w_exten_size = 0;                                    \
-                } else {                                                 \
-                    /* 32 bit, big endian */                             \
-                    w_length_size  = ORIGINAL_DWARF_OFFSET_SIZE;         \
-                    rw_src_data_p += w_length_size;                      \
-                    w_exten_size = 0;                                    \
-                }                                                        \
-            } else {                                                     \
-                /* Standard 32 bit dwarf2/dwarf3 */                      \
-                w_exten_size   = 0;                                      \
-                w_length_size  = ORIGINAL_DWARF_OFFSET_SIZE;             \
-                rw_src_data_p += w_length_size;                          \
-            }                                                            \
-        }                                                                \
-    } while (0)
-#endif /* 0 */
 /*  The w_target > r_sectionlen compare is done without adding in case
     the w_target value read is so large any addition would overflow.
     A basic value sanity check. */
@@ -507,7 +439,7 @@ int _dwarf_get_abbrev_for_code(Dwarf_CU_Context cu_context,
 ** Presumption is the 'endptr' pts to end of some dwarf section data.
 */
 int _dwarf_check_string_valid(Dwarf_Debug dbg,void *areaptr,
-    void *startptr, void *endptr, Dwarf_Error *error);
+    void *startptr, void *endptr, int suggested_error, Dwarf_Error *error);
 
 int _dwarf_length_of_cu_header(Dwarf_Debug dbg, Dwarf_Unsigned offset,
     Dwarf_Bool is_info,

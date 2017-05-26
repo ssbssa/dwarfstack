@@ -10,7 +10,7 @@ CPPFLAGS = -DNO_DBGHELP
 OPT = -O3
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
 INCLUDE = -I$(SRC_DIR)libdwarf -I$(SRC_DIR)mgwhelp -I$(SRC_DIR)include
-WARN = -Wall -Wextra
+WARN = -Wall -Wextra -Wno-implicit-fallthrough
 CFLAGS = $(CPPFLAGS) $(OPT) $(WARN) $(FRAME_POINTER) $(INCLUDE)
 CFLAGS_STATIC = $(CFLAGS) -DDWST_STATIC
 CFLAGS_SHARED = $(CFLAGS) -DDWST_SHARED
@@ -23,6 +23,8 @@ CFLAGS_LIBDWARF = $(CFLAGS) -DDW_TSHASHTYPE=uintptr_t \
 # libdwarf
 DWARF_SRC_REL = dwarf_alloc.c \
 		dwarf_die_deliv.c \
+		dwarf_dnames.c \
+		dwarf_dsc.c \
 		dwarf_error.c \
 		dwarf_form.c \
 		dwarf_frame.c \

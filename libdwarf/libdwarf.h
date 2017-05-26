@@ -2,7 +2,7 @@
 
   Copyright (C) 2000-2010 Silicon Graphics, Inc.  All Rights Reserved.
   Portions Copyright 2007-2010 Sun Microsystems, Inc. All rights reserved.
-  Portions Copyright 2008-2013 David Anderson. All rights reserved.
+  Portions Copyright 2008-2016 David Anderson. All rights reserved.
   Portions Copyright 2008-2010 Arxan Technologies, Inc. All rights reserved.
   Portions Copyright 2010-2012 SN Systems Ltd. All rights reserved.
 
@@ -169,6 +169,12 @@ typedef struct Dwarf_Loc_Head_c_s * Dwarf_Loc_Head_c;
 struct Dwarf_Macro_Context_s;
 typedef struct Dwarf_Macro_Context_s * Dwarf_Loc_Macro_Context;
 
+/*  NEW September 2016. Allows easy access to DW_AT_discr_list
+    array of discriminant values. Input in blockpointer
+    is a block with a list of uleb or sleb numbers
+    (all one or the other, lebunsignedflag instructs
+    how to read the leb values properly) */
+typedef struct Dwarf_Dsc_Head_s * Dwarf_Dsc_Head;
 
 /*  Location record. Records up to 2 operand values.
     Not usable with DWARF5 or DWARF4 with location
@@ -568,6 +574,9 @@ struct Dwarf_Line_Context_s;
 typedef struct Dwarf_Line_Context_s *Dwarf_Line_Context;
 struct Dwarf_Macro_Context_s;
 typedef struct Dwarf_Macro_Context_s *Dwarf_Macro_Context;
+struct Dwarf_Dnames_Head_s;
+typedef struct Dwarf_Dnames_Head_s* Dwarf_Dnames_Head;
+
 
 
 /* Opaque types for Producer Library. */
@@ -600,6 +609,10 @@ An object-file and library agnostic dwarf_object_init() and dwarf_object_finish(
 Projects using dwarf_elf_init() or dwarf_init() can ignore
 the Dwarf_Obj_Access* structures entirely as all these details
 are completed for you.
+
+As of March 2017 additional functions dwarf_elf_init_b() and dwarf_init_b()
+and dwarf_object_init_b() add a groupnumber argument so DWARF5
+split-dwarf sections can be accessed.
 
 */
 
@@ -843,6 +856,9 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLA_LOCDESC_C       0x3a     /* Dwarf_Locdesc_c */
 #define DW_DLA_LOC_HEAD_C      0x3b     /* Dwarf_Loc_Head_c */
 #define DW_DLA_MACRO_CONTEXT   0x3c     /* Dwarf_Macro_Context */
+/*  0x3d (61) is for libdwarf internal use.               */
+#define DW_DLA_DSC_HEAD        0x3e     /* Dwarf_Dsc_Head */
+#define DW_DLA_DNAMES_HEAD     0x3f     /* Dwarf_Dnames_Head */
 
 /* The augmenter string for CIE */
 #define DW_CIE_AUGMENTER_STRING_V0              "z"
@@ -992,7 +1008,7 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLE_CIE_OFFS_ALLOC                   75
 #define DW_DLE_WRONG_ADDRESS                    76
 #define DW_DLE_EXTRA_NEIGHBORS                  77
-#define    DW_DLE_WRONG_TAG                     78
+#define DW_DLE_WRONG_TAG                        78
 #define DW_DLE_DIE_ALLOC                        79
 #define DW_DLE_PARENT_EXISTS                    80
 #define DW_DLE_DBG_NULL                         81
@@ -1187,8 +1203,7 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLE_XU_NAME_COL_ERROR               270
 #define DW_DLE_XU_HASH_ROW_ERROR               271
 #define DW_DLE_XU_HASH_INDEX_ERROR             272
-
-/* DW_DLE_FAILSAFE_ERRVAL is an aid when out of memory. */
+/* ..._FAILSAFE_ERRVAL is an aid when out of memory. */
 #define DW_DLE_FAILSAFE_ERRVAL                 273
 #define DW_DLE_ARANGE_ERROR                    274
 #define DW_DLE_PUBNAMES_ERROR                  275
@@ -1264,9 +1279,43 @@ struct Dwarf_Obj_Access_Interface_s {
 #define DW_DLE_ERRONEOUS_XU_INDEX_SECTION      345
 #define DW_DLE_DIRECTORY_FORMAT_COUNT_VS_DIRECTORIES_MISMATCH 346
 #define DW_DLE_COMPRESSED_EMPTY_SECTION        347
+#define DW_DLE_SIZE_WRAPAROUND                 348
+#define DW_DLE_ILLOGICAL_TSEARCH               349
+#define DW_DLE_BAD_STRING_FORM                 350
+#define DW_DLE_DEBUGSTR_ERROR                  351
+#define DW_DLE_DEBUGSTR_UNEXPECTED_REL         352
+#define DW_DLE_DISCR_ARRAY_ERROR               353
+#define DW_DLE_LEB_OUT_ERROR                   354
+#define DW_DLE_SIBLING_LIST_IMPROPER           355
+#define DW_DLE_LOCLIST_OFFSET_BAD              356
+#define DW_DLE_LINE_TABLE_BAD                  357
+#define DW_DLE_DEBUG_LOClISTS_DUPLICATE        358
+#define DW_DLE_DEBUG_RNGLISTS_DUPLICATE        359
+#define DW_DLE_ABBREV_OFF_END                  360
+#define DW_DLE_FORM_STRING_BAD_STRING          361
+#define DW_DLE_AUGMENTATION_STRING_OFF_END     362
+#define DW_DLE_STRING_OFF_END_PUBNAMES_LIKE    363
+#define DW_DLE_LINE_STRING_BAD                 364
+#define DW_DLE_DEFINE_FILE_STRING_BAD          365
+#define DW_DLE_MACRO_STRING_BAD                366
+#define DW_DLE_MACINFO_STRING_BAD              367
+#define DW_DLE_ZLIB_UNCOMPRESS_ERROR           368
+#define DW_DLE_IMPROPER_DWO_ID                 369
+#define DW_DLE_GROUPNUMBER_ERROR               370
+#define DW_DLE_ADDRESS_SIZE_ZERO               371
+#define DW_DLE_DEBUG_NAMES_HEADER_ERROR        372
+#define DW_DLE_DEBUG_NAMES_AUG_STRING_ERROR    373
+#define DW_DLE_DEBUG_NAMES_PAD_NON_ZERO        374
+#define DW_DLE_DEBUG_NAMES_OFF_END             375
+#define DW_DLE_DEBUG_NAMES_ABBREV_OVERFLOW     376
+#define DW_DLE_DEBUG_NAMES_ABBREV_CORRUPTION   377
+#define DW_DLE_DEBUG_NAMES_NULL_POINTER        378
+#define DW_DLE_DEBUG_NAMES_BAD_INDEX_ARG       379
+#define DW_DLE_DEBUG_NAMES_ENTRYPOOL_OFFSET    380
+#define DW_DLE_DEBUG_NAMES_UNHANDLED_FORM      381
 
-    /* DW_DLE_LAST MUST EQUAL LAST ERROR NUMBER */
-#define DW_DLE_LAST        347
+    /* LAST MUST EQUAL LAST ERROR NUMBER */
+#define DW_DLE_LAST        381
 #define DW_DLE_LO_USER     0x10000
 
     /*  Taken as meaning 'undefined value', this is not
@@ -1322,22 +1371,59 @@ out what form-class it is.
     DW_FORM_CLASS_FRAMEPTR is MIPS/IRIX only, and refers
     to the DW_AT_MIPS_fde attribute (a reference to the
     .debug_frame section).
+
+    DWARF5:
+    DW_FORM_CLASS_LOCLISTSPTR  is like DW_FORM_CLASS_LOCLIST
+    except that LOCLISTSPTR is aways a section offset,
+    never an index, and LOCLISTSPTR is only referenced
+    by DW_AT_loclists_base.
+    Note DW_FORM_CLASS_LOCLISTSPTR spelling to distinguish
+    from DW_FORM_CLASS_LOCLISTPTR.
+
+    DWARF5:
+    DW_FORM_CLASS_RNGLISTSPTR  is like DW_FORM_CLASS_RNGLIST
+    except that RNGLISTSPTR is aways a section offset,
+    never an index. DW_FORM_CLASS_RNGLISTSPTR is only
+    referenced by DW_AT_ranges_base.
 */
 enum Dwarf_Form_Class {
     DW_FORM_CLASS_UNKNOWN,   DW_FORM_CLASS_ADDRESS,
     DW_FORM_CLASS_BLOCK,     DW_FORM_CLASS_CONSTANT,
     DW_FORM_CLASS_EXPRLOC,   DW_FORM_CLASS_FLAG,
-    DW_FORM_CLASS_LINEPTR,   DW_FORM_CLASS_LOCLISTPTR,
-    DW_FORM_CLASS_MACPTR,    DW_FORM_CLASS_RANGELISTPTR,
-    DW_FORM_CLASS_REFERENCE, DW_FORM_CLASS_STRING,
-    DW_FORM_CLASS_FRAMEPTR
+    DW_FORM_CLASS_LINEPTR,
+    DW_FORM_CLASS_LOCLISTPTR,   /* DWARF2,3,4 only */
+    DW_FORM_CLASS_MACPTR,       /* DWARF2,3,4 only */
+    DW_FORM_CLASS_RANGELISTPTR, /* DWARF2,3,4 only */
+    DW_FORM_CLASS_REFERENCE,
+    DW_FORM_CLASS_STRING,
+    DW_FORM_CLASS_FRAMEPTR,      /* MIPS/IRIX DWARF2 only */
+    DW_FORM_CLASS_MACROPTR,      /* DWARF5 */
+    DW_FORM_CLASS_ADDRPTR,       /* DWARF5 */
+    DW_FORM_CLASS_LOCLIST,       /* DWARF5 */
+    DW_FORM_CLASS_LOCLISTSPTR,   /* DWARF5 */
+    DW_FORM_CLASS_RNGLIST,       /* DWARF5 */
+    DW_FORM_CLASS_RNGLISTSPTR,   /* DWARF5 */
+    DW_FORM_CLASS_STROFFSETSPTR, /* DWARF5 */
 };
 
+/*  These support opening DWARF5 split dwarf objects. */
+#define DW_GROUPNUMBER_ANY  0
+#define DW_GROUPNUMBER_BASE 1
+#define DW_GROUPNUMBER_DWO  2
 
 /*===========================================================================*/
 /*  Dwarf consumer interface initialization and termination operations */
 
-/* Initialization based on Unix open fd (using libelf internally). */
+/*  Initialization based on Unix open fd (using libelf internally). */
+/*  New March 2017 */
+int dwarf_init_b(int    /*fd*/,
+    Dwarf_Unsigned    /*access*/,
+    unsigned          /*groupnumber*/,
+    Dwarf_Handler     /*errhand*/,
+    Dwarf_Ptr         /*errarg*/,
+    Dwarf_Debug*      /*dbg*/,
+    Dwarf_Error*      /*error*/);
+
 int dwarf_init(int    /*fd*/,
     Dwarf_Unsigned    /*access*/,
     Dwarf_Handler     /*errhand*/,
@@ -1345,7 +1431,15 @@ int dwarf_init(int    /*fd*/,
     Dwarf_Debug*      /*dbg*/,
     Dwarf_Error*      /*error*/);
 
-/* Initialization based on libelf/sgi-fastlibelf open pointer. */
+/*  Initialization based on libelf/sgi-fastlibelf open pointer. */
+/*  New March 2017 */
+int dwarf_elf_init_b(dwarf_elf_handle /*elf*/,
+    Dwarf_Unsigned    /*access*/,
+    unsigned          /*group_number*/,
+    Dwarf_Handler     /*errhand*/,
+    Dwarf_Ptr         /*errarg*/,
+    Dwarf_Debug*      /*dbg*/,
+    Dwarf_Error*      /*error*/);
 int dwarf_elf_init(dwarf_elf_handle /*elf*/,
     Dwarf_Unsigned    /*access*/,
     Dwarf_Handler     /*errhand*/,
@@ -1362,6 +1456,14 @@ int dwarf_get_elf(Dwarf_Debug /*dbg*/,
 
 int dwarf_finish(Dwarf_Debug /*dbg*/, Dwarf_Error* /*error*/);
 
+
+/*  NEW March 2017. */
+int dwarf_object_init_b(Dwarf_Obj_Access_Interface* /*obj*/,
+    Dwarf_Handler /*errhand*/,
+    Dwarf_Ptr     /*errarg*/,
+    unsigned      /*groupnumber*/,
+    Dwarf_Debug*  /*dbg*/,
+    Dwarf_Error*  /*error*/);
 
 int dwarf_object_init(Dwarf_Obj_Access_Interface* /*obj*/,
     Dwarf_Handler /*errhand*/,
@@ -1796,7 +1898,7 @@ int dwarf_global_formref(Dwarf_Attribute /*attr*/,
 int dwarf_formsig8(Dwarf_Attribute /*attr*/,
     Dwarf_Sig8 * /*returned sig bytes*/,
     Dwarf_Error*     /*error*/);
-/*  dwarf_formsig8_b returns in the caller-provided 8 byte area
+/*  dwarf_formsig8_const returns in the caller-provided 8 byte area
     the 8 bytes of a form const (DW_FORM_data8).  Not a string.  */
 int dwarf_formsig8_const(Dwarf_Attribute /*attr*/,
     Dwarf_Sig8 * /*returned sig bytes*/,
@@ -1898,9 +2000,7 @@ void dwarf_srclines_dealloc(Dwarf_Debug /*dbg*/,
     dwarf_srclines_from_linecontext()  use.
     Works for DWARF2,3,4,5 and for experimental line tables.
     New work should use the new Dwarf_Line_Context
-    interfaces.
-    This also opens a Dwarf_Line_Context struct which
-    is used by dwarf_srcfiles_b()
+    interface.
     This interface only reads the line table header, so
     it takes relatively little time.
     *is_single_table will be set non-zero for all standard dwarf line sections.
@@ -2031,18 +2131,6 @@ int dwarf_srcfiles(Dwarf_Die /*die*/,
     Dwarf_Signed *   /*filecount*/,
     Dwarf_Error*     /*error*/);
 
-/*  New October 2015.
-    Returns the same data as
-    dwarf_srcfiles, but is based on
-    a Dwarf_Line_Context created by
-    dwarf_srclines_b(). Using this avoids
-    rereading the line table header for this CU. */
-int dwarf_srcfiles_b(Dwarf_Line_Context /*context*/,
-    Dwarf_Unsigned *   /*version*/,
-    char           *** /*srcfiles*/,
-    Dwarf_Signed   *   /*filecount*/,
-    Dwarf_Error    *   /*error*/);
-
 int dwarf_linebeginstatement(Dwarf_Line /*line*/,
     Dwarf_Bool  *    /*returned_bool*/,
     Dwarf_Error*     /*error*/);
@@ -2132,7 +2220,163 @@ int dwarf_line_subprog(Dwarf_Line /*line*/,
     Dwarf_Error *    /*error*/);
 /* End of line table interfaces. */
 
-/* global name space operations (.debug_pubnames access) */
+/* .debug_names names table interfaces. DWARF5 */
+/*  New April 2017 */
+int dwarf_debugnames_header(Dwarf_Debug /*dbg*/,
+    Dwarf_Dnames_Head * /*dn_out*/,
+
+    /* *dn_count_out returns the number of name indexes
+        in the .debug_names section */
+    Dwarf_Unsigned    * /*dn_index_count_out*/,
+    Dwarf_Error *       /*error*/);
+
+/*  Since there may be multiple name indexes in a .debug_names
+    section we use index_number starting at 0 through
+    dn_index_count_out-1. */
+int dwarf_debugnames_sizes(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+
+    Dwarf_Unsigned * /*section_offset*/,
+    Dwarf_Unsigned * /*version*/,
+    Dwarf_Unsigned * /*offset_size*/, /* 4 or 8 */
+
+    /* The counts are entry counts, not byte sizes. */
+    Dwarf_Unsigned * /*comp_unit_count*/,
+    Dwarf_Unsigned * /*local_type_unit_count*/,
+    Dwarf_Unsigned * /*foreign_type_unit_count*/,
+    Dwarf_Unsigned * /*bucket_count*/,
+    Dwarf_Unsigned * /*name_count*/,
+
+    /* The following are counted in bytes */
+    Dwarf_Unsigned * /*indextable_overall_length*/,
+    Dwarf_Unsigned * /*abbrev_table_size*/,
+    Dwarf_Unsigned * /*entry_pool_size*/,
+    Dwarf_Unsigned * /*augmentation_string_size*/,
+
+    Dwarf_Error *       /*error*/);
+
+int dwarf_debugnames_cu_entry(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*offset_number*/,
+    Dwarf_Unsigned    * /*offset_count*/,
+    Dwarf_Unsigned    * /*offset*/,
+    Dwarf_Error *       /*error*/);
+int dwarf_debugnames_local_tu_entry(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*offset_number*/,
+    Dwarf_Unsigned    * /*offset_count*/,
+    Dwarf_Unsigned    * /*offset*/,
+    Dwarf_Error *       /*error*/);
+int dwarf_debugnames_foreign_tu_entry(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*sig_number*/,
+    Dwarf_Unsigned    * /*sig_mininum*/,
+    Dwarf_Unsigned    * /*sig_count*/,
+    Dwarf_Sig8        * /*signature*/,
+    Dwarf_Error *       /*error*/);
+int dwarf_debugnames_bucket(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*bucket_number*/,
+    Dwarf_Unsigned    * /*bucket_count*/,
+    Dwarf_Unsigned    * /*index_of_name_entry*/,
+    Dwarf_Error *       /*error*/);
+
+int dwarf_debugnames_name(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*name_entry*/,
+    Dwarf_Unsigned    * /*names_count*/,
+    Dwarf_Sig8        * /*signature*/,
+    Dwarf_Unsigned    * /*offset_to_debug_str*/,
+    Dwarf_Unsigned    * /*offset_in_entrypool*/,
+    Dwarf_Error *       /*error*/);
+
+int
+dwarf_debugnames_abbrev_by_index(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned    /*index_number*/,
+    Dwarf_Unsigned    /*abbrev_entry*/,
+    Dwarf_Unsigned *  /*abbrev_code*/,
+    Dwarf_Unsigned *  /*tag*/,
+
+    /*  The number of valid abbrev_entry values: 0 to number_of_abbrev-1
+        */
+    Dwarf_Unsigned *  /*number_of_abbrev*/,
+
+    /*  The number of attr/form pairs, not counting the trailing
+        0,0 pair. */
+    Dwarf_Unsigned * /*number_of_attr_form_entries*/,
+    Dwarf_Error *    /*error*/);
+
+int
+dwarf_debugnames_abbrev_by_code(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned    /*index_number*/,
+    Dwarf_Unsigned    /*abbrev_code*/,
+    Dwarf_Unsigned *  /*tag*/,
+
+    /*  The number of this code/tag as an array index. */
+    Dwarf_Unsigned *  /*index_of_abbrev*/,
+
+    /*  The number of attr/form pairs, not counting the trailing
+        0,0 pair. */
+    Dwarf_Unsigned * /*number_of_attr_form_entries*/,
+    Dwarf_Error *    /*error*/);
+
+int
+dwarf_debugnames_abbrev_form_by_index(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned   /*index_number*/,
+    Dwarf_Unsigned   /*abbrev_entry_index*/,
+    Dwarf_Unsigned   /*abbrev_form_index*/,
+    Dwarf_Unsigned * /*name_index_attr*/,
+    Dwarf_Unsigned * /*form*/,
+    Dwarf_Unsigned * /*number_of_attr_form_entries*/,
+    Dwarf_Error    * /*error*/);
+
+
+/*  This, combined with dwarf_debugnames_entrypool_values(),
+    lets one examine as much or as little of an entrypool
+    as one wants to by alternately calling these two
+    functions. */
+int dwarf_debugnames_entrypool(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*offset_in_entrypool*/,
+    Dwarf_Unsigned *    /*abbrev_code*/,
+    Dwarf_Unsigned *    /*tag*/,
+    Dwarf_Unsigned *    /*value_count*/,
+    Dwarf_Unsigned *    /*index_of_abbrev*/,
+    Dwarf_Unsigned *    /*offset_of_initial_value*/,
+    Dwarf_Error *       /*error*/);
+
+/*  Caller, knowing array size needed, passes in arrays
+    it allocates of for idx, form, offset-size-values,
+    and signature values.  Caller must examine idx-number
+    and form to decide, for each array element, whether
+    the offset or the signature contains the value.
+    So this returns all the values for the abbrev code.
+    And points via offset_of_next to the next abbrev code.
+    */
+int dwarf_debugnames_entrypool_values(Dwarf_Dnames_Head /*dn*/,
+    Dwarf_Unsigned      /*index_number*/,
+    Dwarf_Unsigned      /*index_of_abbrev*/,
+    Dwarf_Unsigned      /*offset_in_entrypool_of_values*/,
+    Dwarf_Unsigned *    /*array_dw_idx_number*/,
+    Dwarf_Unsigned *    /*array_form*/,
+    Dwarf_Unsigned *    /*array_of_offsets*/,
+    Dwarf_Sig8     *    /*array_of_signatures*/,
+
+    /*  offset of the next entrypool entry. */
+    Dwarf_Unsigned *    /*offset_of_next_entrypool*/,
+    Dwarf_Error *       /*error*/);
+
+/*  FIXME: add interfaces for string search given hash and
+    string */
+
+
+
+/* end of .debug_names interfaces. */
+
+
+/*  global name space operations (.debug_pubnames access) */
+/*  The pubnames and similar sections are rarely used. Few compilers
+    emit them. They are DWARF 2,3,4 only., not DWARF 5.  */
 int dwarf_get_globals(Dwarf_Debug /*dbg*/,
     Dwarf_Global**   /*globals*/,
     Dwarf_Signed *   /*number_of_globals*/,
@@ -2828,18 +3072,6 @@ int _dwarf_cie_section_offset(Dwarf_Debug /*dbg*/,
 
 typedef struct Dwarf_Macro_Details_s Dwarf_Macro_Details;
 
-int dwarf_get_macro(Dwarf_Debug /*dbg*/,
-    char *        /*requested_macro_name*/,
-    Dwarf_Addr    /*pc_of_request*/,
-    char **       /*returned_macro_value*/,
-    Dwarf_Error * /*error*/);
-
-int dwarf_get_all_defined_macros(Dwarf_Debug /*dbg*/,
-    Dwarf_Addr     /*pc_of_request*/,
-    Dwarf_Signed * /*returned_count*/,
-    char ***       /*returned_pointers_to_macros*/,
-    Dwarf_Error *  /*error*/);
-
 char *dwarf_find_macro_value_start(char * /*macro_string*/);
 
 int dwarf_get_macro_details(Dwarf_Debug /*dbg*/,
@@ -3157,9 +3389,30 @@ int dwarf_producer_init(
     Dwarf_P_Debug *,      /* dbg_returned */
     Dwarf_Error *         /*error*/);
 
-Dwarf_Signed dwarf_transform_to_disk_form(Dwarf_P_Debug /*dbg*/,
+/*  Returns DW_DLV_OK or DW_DLV_ERROR.
+    The desired form must be DW_FORM_string (the default)
+    or DW_FORM_strp.  */
+int dwarf_pro_set_default_string_form(Dwarf_P_Debug /*dbg*/,
+    int /*desired_form*/,
     Dwarf_Error*     /*error*/);
 
+/*  the old interface. Still supported. */
+Dwarf_Signed dwarf_transform_to_disk_form(Dwarf_P_Debug /*dbg*/,
+    Dwarf_Error*     /*error*/);
+/*  New September 2016. The preferred interface. */
+int dwarf_transform_to_disk_form_a(Dwarf_P_Debug /*dbg*/,
+    Dwarf_Signed *   /*nbufs_out*/,
+    Dwarf_Error*     /*error*/);
+
+/* New September 2016. Preferred. */
+int dwarf_get_section_bytes_a(Dwarf_P_Debug /*dbg*/,
+    Dwarf_Signed     /*dwarf_section*/,
+    Dwarf_Signed*    /*elf_section_index*/,
+    Dwarf_Unsigned*  /*length*/,
+    Dwarf_Ptr     *  /*section_bytes*/,
+    Dwarf_Error*     /*error*/);
+
+/* Original function.  Checking for error is difficult. */
 Dwarf_Ptr dwarf_get_section_bytes(Dwarf_P_Debug /*dbg*/,
     Dwarf_Signed     /*dwarf_section*/,
     Dwarf_Signed*    /*elf_section_index*/,
@@ -3207,6 +3460,8 @@ int dwarf_get_string_attributes_info(Dwarf_P_Debug,
 void dwarf_reset_section_bytes(Dwarf_P_Debug /*dbg*/);
 
 Dwarf_Unsigned dwarf_producer_finish(Dwarf_P_Debug /*dbg*/,
+    Dwarf_Error* /*error*/);
+int dwarf_producer_finish_a(Dwarf_P_Debug /*dbg*/,
     Dwarf_Error* /*error*/);
 
 /* Producer attribute addition functions. */
@@ -3479,7 +3734,18 @@ Dwarf_P_Fde dwarf_fde_cfa_offset(
     Dwarf_Signed    /*offset*/,
     Dwarf_Error*    /*error*/);
 
-/* die creation & addition routines */
+/*  die creation & addition routines
+    dwarf_new_die_a() new September 2016.
+    Preferred over dwarf_new_die(). */
+int dwarf_new_die_a(
+    Dwarf_P_Debug   /*dbg*/,
+    Dwarf_Tag       /*tag*/,
+    Dwarf_P_Die     /*parent*/,
+    Dwarf_P_Die     /*child*/,
+    Dwarf_P_Die     /*left */,
+    Dwarf_P_Die     /*right*/,
+    Dwarf_P_Die   * /*die_out*/,
+    Dwarf_Error*    /*error*/);
 Dwarf_P_Die dwarf_new_die(
     Dwarf_P_Debug    /*dbg*/,
     Dwarf_Tag         /*tag*/,
@@ -3489,6 +3755,12 @@ Dwarf_P_Die dwarf_new_die(
     Dwarf_P_Die     /*right*/,
     Dwarf_Error*    /*error*/);
 
+/* New September 2016. */
+int dwarf_add_die_to_debug_a(
+    Dwarf_P_Debug   /*dbg*/,
+    Dwarf_P_Die     /*die*/,
+    Dwarf_Error*    /*error*/);
+/*  Original form. Still supported. */
 Dwarf_Unsigned dwarf_add_die_to_debug(
     Dwarf_P_Debug   /*dbg*/,
     Dwarf_P_Die     /*die*/,
@@ -3509,6 +3781,16 @@ Dwarf_Unsigned dwarf_get_die_marker(
     Dwarf_Unsigned *  /*marker*/,
     Dwarf_Error *   /*error*/);
 
+/*  New September 2016. Preferred version */
+int dwarf_die_link_a(
+    Dwarf_P_Die     /*die*/,
+    Dwarf_P_Die     /*parent*/,
+    Dwarf_P_Die     /*child*/,
+    Dwarf_P_Die     /*left*/,
+    Dwarf_P_Die     /*right*/,
+    Dwarf_Error*    /*error*/);
+
+/*  Original version. Use dwarf_die_link_a() instead. */
 Dwarf_P_Die dwarf_die_link(
     Dwarf_P_Die     /*die*/,
     Dwarf_P_Die     /*parent*/,
@@ -3739,6 +4021,28 @@ dwarf_get_section_max_offsets_c(Dwarf_Debug /*dbg*/,
     Dwarf_Unsigned * /*debug_sup_size*/,
     Dwarf_Unsigned * /*debug_cu_index_size*/,
     Dwarf_Unsigned * /*debug_tu_index_size*/);
+int
+dwarf_get_section_max_offsets_d(Dwarf_Debug /*dbg*/,
+    Dwarf_Unsigned * /*debug_info_size*/,
+    Dwarf_Unsigned * /*debug_abbrev_size*/,
+    Dwarf_Unsigned * /*debug_line_size*/,
+    Dwarf_Unsigned * /*debug_loc_size*/,
+    Dwarf_Unsigned * /*debug_aranges_size*/,
+    Dwarf_Unsigned * /*debug_macinfo_size*/,
+    Dwarf_Unsigned * /*debug_pubnames_size*/,
+    Dwarf_Unsigned * /*debug_str_size*/,
+    Dwarf_Unsigned * /*debug_frame_size*/,
+    Dwarf_Unsigned * /*debug_ranges_size*/,
+    Dwarf_Unsigned * /*debug_pubtypes_size*/,
+    Dwarf_Unsigned * /*debug_types_size*/,
+    Dwarf_Unsigned * /*debug_macro_size*/,
+    Dwarf_Unsigned * /*debug_str_offsets_size*/,
+    Dwarf_Unsigned * /*debug_sup_size*/,
+    Dwarf_Unsigned * /*debug_cu_index_size*/,
+    Dwarf_Unsigned * /*debug_tu_index_size*/,
+    Dwarf_Unsigned * /*debug_names_size*/,
+    Dwarf_Unsigned * /*debug_loclists_size*/,
+    Dwarf_Unsigned * /*debug_rnglists_size*/);
 
 
 /*  The 'set' calls here return the original (before any change
@@ -3856,42 +4160,43 @@ unsigned dwarf_set_harmless_error_list_size(Dwarf_Debug /*dbg*/,
 /* The following copied from a generated dwarf_names.h */
 
 /* BEGIN FILE */
-
 extern int dwarf_get_ACCESS_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ADDR_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_AT_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ATCF_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ATE_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_AT_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_CC_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_CFA_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_CHILDREN_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_children_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_DEFAULTED_name (unsigned int /*val_in*/,const char ** /*s_out*/);
-extern int dwarf_get_DS_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_CHILDREN_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_DEFAULTED_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_DSC_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_DS_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_EH_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_END_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_FORM_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_FRAME_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ID_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_IDX_name (unsigned int /*val_in*/,const char ** /*s_out*/);
+extern int dwarf_get_IDX_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_INL_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ISA_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_LANG_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_LLE_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_LNCT_name (unsigned int /*val_in*/,const char ** /*s_out*/);
+/*  dwarf_get_LLEX_name is likely just temporary. Not standard. */
+extern int dwarf_get_LLEX_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_LNCT_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_LNE_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_LNS_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_MACINFO_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_MACRO_name (unsigned int /*val_in*/,const char ** /*s_out*/);
+extern int dwarf_get_MACRO_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_OP_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_ORD_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_SECT_name (unsigned int /*val_in*/,const char ** /*s_out*/);
+extern int dwarf_get_RLE_name(unsigned int /*val_in*/, const char ** /*s_out */);
+extern int dwarf_get_SECT_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_TAG_name(unsigned int /*val_in*/, const char ** /*s_out */);
-extern int dwarf_get_UT_name (unsigned int /*val_in*/,const char ** /*s_out*/);
+extern int dwarf_get_UT_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_VIRTUALITY_name(unsigned int /*val_in*/, const char ** /*s_out */);
 extern int dwarf_get_VIS_name(unsigned int /*val_in*/, const char ** /*s_out */);
-
 /* END FILE */
 
 /* Convert local offset into global offset */
@@ -3924,12 +4229,42 @@ int dwarf_get_section_info_by_index(Dwarf_Debug      /*dbg*/,
 /*  Get section count, of object file sections. */
 int dwarf_get_section_count(Dwarf_Debug /*dbg*/);
 
+
+
 /*  Get the version and offset size of a CU context.
     This is useful as a precursor to
     calling dwarf_get_form_class() at times.  */
 int dwarf_get_version_of_die(Dwarf_Die /*die*/,
     Dwarf_Half * /*version*/,
     Dwarf_Half * /*offset_size*/);
+
+
+int dwarf_discr_list(Dwarf_Debug /*dbg*/,
+    Dwarf_Small    * /*blockpointer*/,
+    Dwarf_Unsigned   /*blocklen*/,
+    Dwarf_Dsc_Head * /*dsc_head_out*/,
+    Dwarf_Unsigned * /*dsc_array_length_out*/,
+    Dwarf_Error    * /*error*/);
+
+/*  NEW September 2016. Allows easy access to DW_AT_discr_list
+    entry. Callers must know which is the appropriate
+    one of the following two interfaces, though both
+    will work. */
+int dwarf_discr_entry_u(Dwarf_Dsc_Head /* dsc */,
+    Dwarf_Unsigned   /*entrynum*/,
+    Dwarf_Half     * /*out_type*/,
+    Dwarf_Unsigned * /*out_discr_low*/,
+    Dwarf_Unsigned * /*out_discr_high*/,
+    Dwarf_Error    * /*error*/);
+
+/*  NEW September 2016. Allows easy access to DW_AT_discr_list
+    entry. */
+int dwarf_discr_entry_s(Dwarf_Dsc_Head /* dsc */,
+    Dwarf_Unsigned   /*entrynum*/,
+    Dwarf_Half     * /*out_type*/,
+    Dwarf_Signed   * /*out_discr_low*/,
+    Dwarf_Signed   * /*out_discr_high*/,
+    Dwarf_Error    * /*error*/);
 
 /*  These make the  LEB encoding routines visible to libdwarf
     callers. Added November, 2012. */
@@ -3958,9 +4293,16 @@ extern Dwarf_Cmdline_Options dwarf_cmdline_options;
 /* Set libdwarf to reflect some application command line options. */
 void dwarf_record_cmdline_options(Dwarf_Cmdline_Options /*options*/);
 
+int dwarf_pro_get_string_stats(Dwarf_P_Debug /*dbg*/,
+    Dwarf_Unsigned * /*str_count*/,
+    Dwarf_Unsigned * /*str_total_length*/,
+    Dwarf_Unsigned * /*count_debug_str*/,
+    Dwarf_Unsigned * /*len_debug_str*/,
+    Dwarf_Unsigned * /*reused_count*/,
+    Dwarf_Unsigned * /*reused_len*/,
+    Dwarf_Error    * /*error*/);
+
 #ifdef __cplusplus
 }
 #endif
 #endif /* _LIBDWARF_H */
-
-
