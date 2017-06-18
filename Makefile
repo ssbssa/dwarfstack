@@ -1,5 +1,5 @@
 
-DWST_VERSION = 2.0
+DWST_VERSION = 2.1-git
 
 SRC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
