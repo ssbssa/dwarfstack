@@ -107,10 +107,12 @@ $(ZLIB_OBJ) : | zlib
 $(INC): $(SRC_DIR)$(INC) | include
 	cp -fp $< $@
 
-LICENSE.txt: $(SRC_DIR)LICENSE.txt
-	cp -fp $< $@
-
 endif
+
+
+share/licenses/dwarfstack/LICENSE.txt: $(SRC_DIR)LICENSE.txt
+	@mkdir -p share/licenses/dwarfstack
+	cp -fp $< $@
 
 
 # libdwarf
@@ -152,7 +154,7 @@ install: $(BUILD)
 
 
 # package
-package: $(BUILD) LICENSE.txt
+package: $(BUILD) share/licenses/dwarfstack/LICENSE.txt
 	tar -cJf dwarfstack-$(DWST_VERSION)-mingw.tar.xz $^
 
 package-src:
