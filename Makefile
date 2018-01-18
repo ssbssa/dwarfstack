@@ -153,22 +153,50 @@ install: $(BUILD)
 	cp -f $(BIN) $(PREFIX)/bin
 
 
-# package
-package: $(BUILD) share/licenses/dwarfstack/LICENSE.txt
-	tar -cJf dwarfstack-$(DWST_VERSION)-mingw.tar.xz $^
+# builds
+build32 build64:
+	@mkdir -p $@
 
-package-src:
-	CURDIR=`pwd`; cd $(SRC_DIR) && git archive "HEAD^{tree}" |xz >$$CURDIR/dwarfstack-$(DWST_VERSION).tar.xz
+build32/bin/dwarfstack.dll: | build32
+	$(MAKE) -C build32 -f ../Makefile HOSTPREFIX=i686-w64-mingw32- bin/dwarfstack.dll
 
+build64/bin/dwarfstack.dll: | build64
+	$(MAKE) -C build64 -f ../Makefile HOSTPREFIX=x86_64-w64-mingw32- bin/dwarfstack.dll
 
-packages: package-src package32 package64
-
-package32:
-	@mkdir -p build32
+build32/dwarfstack-$(DWST_VERSION)-mingw.tar.xz: build32/bin/dwarfstack.dll
 	$(MAKE) -C build32 -f ../Makefile HOSTPREFIX=i686-w64-mingw32- package
-	cp -f build32/dwarfstack-$(DWST_VERSION)-mingw.tar.xz dwarfstack-$(DWST_VERSION)-mingw32.tar.xz
 
-package64:
-	@mkdir -p build64
+build64/dwarfstack-$(DWST_VERSION)-mingw.tar.xz: build64/bin/dwarfstack.dll
 	$(MAKE) -C build64 -f ../Makefile HOSTPREFIX=x86_64-w64-mingw32- package
-	cp -f build64/dwarfstack-$(DWST_VERSION)-mingw.tar.xz dwarfstack-$(DWST_VERSION)-mingw64.tar.xz
+
+dwarfstack%.dll: build%/bin/dwarfstack.dll
+	cp -fp $< $@
+
+
+# package
+packages: package-src package32 package64 package-dlls
+
+dwarfstack-$(DWST_VERSION)-mingw.tar.xz: $(BUILD) share/licenses/dwarfstack/LICENSE.txt
+	@rm -f $@
+	tar -cJf $@ $^
+
+dwarfstack-$(DWST_VERSION).tar.xz:
+	@rm -f $@
+	CURDIR=`pwd`; cd $(SRC_DIR) && git archive "HEAD^{tree}" |xz >$$CURDIR/$@
+
+dwarfstack-$(DWST_VERSION)-mingw%.tar.xz: build%/dwarfstack-$(DWST_VERSION)-mingw.tar.xz
+	cp -fp $< $@
+
+dwarfstack-$(DWST_VERSION)-dlls.7z: LICENSE.txt dwarfstack32.dll dwarfstack64.dll
+	@rm -f $@
+	7z a -mx=9 $@ $^
+
+package: dwarfstack-$(DWST_VERSION)-mingw.tar.xz
+
+package-src: dwarfstack-$(DWST_VERSION).tar.xz
+
+package32: dwarfstack-$(DWST_VERSION)-mingw32.tar.xz
+
+package64: dwarfstack-$(DWST_VERSION)-mingw64.tar.xz
+
+package-dlls: dwarfstack-$(DWST_VERSION)-dlls.7z
