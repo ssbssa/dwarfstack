@@ -3,9 +3,11 @@
 /build32
 /build64
 /share
+/*.user
 *.swp
 *.o
 *.exe
 *.dll
 *.a
 *.tar.xz
+*.7z
