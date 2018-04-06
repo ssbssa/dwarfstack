@@ -2,6 +2,7 @@ import qbs
 
 DynamicLibrary {
     name: "dwarfstack"
+    condition: qbs.toolchain && qbs.toolchain.contains("gcc")
     targetName: "dwarfstack" + (qbs.architecture === "x86_64" ? '64' : '32')
     Depends { name: "cpp" }
     Export {
