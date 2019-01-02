@@ -5,7 +5,7 @@ CFLAGS = $(OPT) -Wall -Wextra -I../../include -DDWST_STATIC
 
 
 a2l.exe: a2l.c ../../lib/libdwarfstack.a
-	$(CC) $(CFLAGS) -s -o $@ $^
+	$(CC) $(CFLAGS) -municode -s -o $@ $^
 
 ../../lib/libdwarfstack.a:
 	$(MAKE) -C ../.. lib/libdwarfstack.a

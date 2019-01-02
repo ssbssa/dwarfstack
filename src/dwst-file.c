@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -201,12 +201,37 @@ static char *dwarf_name_of_func_linked( Dwarf_Debug dbg,Dwarf_Die die )
 }
 
 
+static void dwarf_callback(
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    uint64_t addr,const char *filename,const wchar_t *filenameW,
+    int lineno,const char *funcname,void *context,int columnno )
+{
+  if( callbackFunc )
+  {
+    char *ansi = NULL;
+    if( !filename )
+      filename = ansi = dwst_wide2ansi( filenameW );
+    callbackFunc( addr,filename,lineno,funcname,context,columnno );
+    free( ansi );
+  }
+  else
+  {
+    wchar_t *wide = NULL;
+    if( !filenameW )
+      filenameW = wide = dwst_ansi2wide( filename );
+    callbackFuncW( addr,filenameW,lineno,funcname,context,columnno );
+    free( wide );
+  }
+}
+
+
 typedef struct inline_info
 {
   Dwarf_Addr ptr,low;
   char **files;
   int fileCount;
   dwstCallback *callbackFunc;
+  dwstCallbackW *callbackFuncW;
   void *callbackContext;
   uint64_t ptrOrig;
   int fileno,lineno,columnno;
@@ -270,9 +295,9 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
   {
     char *funcname = dwarf_name_of_func_linked( dbg,die );
 
-    cuInfo->callbackFunc( cuInfo->ptrOrig,
-        cuInfo->files[cuInfo->fileno-1],cuInfo->lineno,funcname,
-        cuInfo->callbackContext,cuInfo->columnno );
+    dwarf_callback( cuInfo->callbackFunc,cuInfo->callbackFuncW,
+        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno-1],NULL,
+        cuInfo->lineno,funcname,cuInfo->callbackContext,cuInfo->columnno );
 
     if( funcname )
       dwarf_dealloc( dbg,funcname,DW_DLA_STRING );
@@ -297,9 +322,9 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
   {
     char *funcname = dwarf_name_of_func_linked( dbg,die );
 
-    cuInfo->callbackFunc( cuInfo->ptrOrig,
-        cuInfo->files[cuInfo->fileno-1],cuInfo->lineno,funcname,
-        cuInfo->callbackContext,cuInfo->columnno );
+    dwarf_callback( cuInfo->callbackFunc,cuInfo->callbackFuncW,
+        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno-1],NULL,
+        cuInfo->lineno,funcname,cuInfo->callbackContext,cuInfo->columnno );
 
     cuInfo->fileno = fileno;
     cuInfo->lineno = lineno;
@@ -335,23 +360,27 @@ typedef struct cu_info
   Dwarf_Signed fileCount;
 } cu_info;
 
-int dwstOfFile(
-    const char *name,uint64_t imageBase,
+int dwstOfFileExt(
+    const char *name,const wchar_t *nameW,uint64_t imageBase,
     uint64_t *addr,int count,
-    dwstCallback *callbackFunc,void *callbackContext )
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext )
 {
-  if( !name || !addr || !count || !callbackFunc ) return( 0 );
+  if( !nameW || !addr || !count || (!callbackFunc && !callbackFuncW) )
+    return( 0 );
 
   if( imageBase )
-    callbackFunc( imageBase,name,DWST_BASE_ADDR,NULL,callbackContext,0 );
+    dwarf_callback( callbackFunc,callbackFuncW,imageBase,name,nameW,
+        DWST_BASE_ADDR,NULL,callbackContext,0 );
 
   Dwarf_Addr imageBase_dbg;
   Dwarf_Debug dbg;
-  if( dwarf_pe_init(name,&imageBase_dbg,0,0,&dbg,NULL)!=DW_DLV_OK )
+  if( dwarf_pe_init(nameW,&imageBase_dbg,0,0,&dbg,NULL)!=DW_DLV_OK )
   {
     int i;
     for( i=0; i<count; i++ )
-      callbackFunc( addr[i],name,DWST_NO_DBG_SYM,NULL,callbackContext,0 );
+      dwarf_callback( callbackFunc,callbackFuncW,addr[i],name,nameW,
+          DWST_NO_DBG_SYM,NULL,callbackContext,0 );
 
     return( count );
   }
@@ -532,13 +561,13 @@ int dwstOfFile(
           if( srcfileno<=(Dwarf_Unsigned)fileCount )
           {
             inline_info ii = { ptr,cuInfo->low,
-              files,fileCount,callbackFunc,callbackContext,ptrOrig,
-              srcfileno,lineno,columnno };
+              files,fileCount,callbackFunc,callbackFuncW,callbackContext,
+              ptrOrig,srcfileno,lineno,columnno };
             walkChilds( dbg,die,(ChildWalker*)findInlined,&ii );
           }
           else
-            callbackFunc( ptrOrig,
-                name,DWST_NO_SRC_FILE,NULL,callbackContext,0 );
+            dwarf_callback( callbackFunc,callbackFuncW,ptrOrig,name,nameW,
+                DWST_NO_SRC_FILE,NULL,callbackContext,0 );
         }
 
         dwarf_dealloc( dbg,die,DW_DLA_DIE );
@@ -548,8 +577,8 @@ int dwstOfFile(
     }
 
     if( !found_ptr )
-      callbackFunc( ptrOrig,
-          name,DWST_NOT_FOUND,NULL,callbackContext,0 );
+      dwarf_callback( callbackFunc,callbackFuncW,ptrOrig,name,nameW,
+          DWST_NOT_FOUND,NULL,callbackContext,0 );
   }
 
   for( j=0; j<cuQty; j++ )
@@ -573,4 +602,25 @@ int dwstOfFile(
   dwarf_pe_finish( dbg,NULL );
 
   return( i );
+}
+
+int dwstOfFile(
+    const char *name,uint64_t imageBase,
+    uint64_t *addr,int count,
+    dwstCallback *callbackFunc,void *callbackContext )
+{
+  wchar_t *nameW = dwst_ansi2wide( name );
+  int ret = dwstOfFileExt( name,nameW,imageBase,addr,count,
+      callbackFunc,NULL,callbackContext );
+  free( nameW );
+  return( ret );
+}
+
+int dwstOfFileW(
+    const wchar_t *name,uint64_t imageBase,
+    uint64_t *addr,int count,
+    dwstCallbackW *callbackFunc,void *callbackContext )
+{
+  return( dwstOfFileExt(NULL,name,imageBase,addr,count,
+        NULL,callbackFunc,callbackContext) );
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,10 @@
  */
 
 
+#define UNICODE
+#define _UNICODE
 #include <dwarfstack.h>
+#include <dwarf_pe.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -73,7 +76,7 @@ struct dialog_info
 };
 
 static void printAddr( HWND hwnd,const TCHAR *beg,int num,
-    void *ptr,const TCHAR *posFile,int posLine,const TCHAR *funcName,
+    void *ptr,const TCHAR *posFile,int posLine,const char *funcName,
     int posColumn )
 {
   TCHAR hexNum[20];
@@ -84,19 +87,19 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
 
     if( num>=0 )
     {
-      _stprintf( hexNum,TEXT("%02d"),num );
+      _stprintf( hexNum,20,TEXT("%02d"),num );
       Edit_ReplaceSel( hwnd,hexNum );
     }
 
     Edit_ReplaceSel( hwnd,TEXT(": 0x") );
-    _stprintf( hexNum,TEXT("%p"),ptr );
+    _stprintf( hexNum,20,TEXT("%p"),ptr );
     Edit_ReplaceSel( hwnd,hexNum );
   }
   else
   {
-    _stprintf( hexNum,TEXT("%*s"),14,TEXT("") );
+    _stprintf( hexNum,20,TEXT("%*s"),14,TEXT("") );
     Edit_ReplaceSel( hwnd,hexNum );
-    _stprintf( hexNum,TEXT("%*s"),2+(int)sizeof(void*)*2,TEXT("") );
+    _stprintf( hexNum,20,TEXT("%*s"),2+(int)sizeof(void*)*2,TEXT("") );
     Edit_ReplaceSel( hwnd,hexNum );
   }
 
@@ -108,13 +111,13 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
     if( posLine>0 )
     {
       Edit_ReplaceSel( hwnd,TEXT(":") );
-      _stprintf( hexNum,TEXT("%d"),posLine );
+      _stprintf( hexNum,20,TEXT("%d"),posLine );
       Edit_ReplaceSel( hwnd,hexNum );
 
       if( posColumn>0 )
       {
         Edit_ReplaceSel( hwnd,TEXT(":") );
-        _stprintf( hexNum,TEXT("%d"),posColumn );
+        _stprintf( hexNum,20,TEXT("%d"),posColumn );
         Edit_ReplaceSel( hwnd,hexNum );
       }
     }
@@ -124,22 +127,26 @@ static void printAddr( HWND hwnd,const TCHAR *beg,int num,
 
   if( funcName )
   {
+    wchar_t *funcNameW = dwst_ansi2wide( funcName );
     Edit_ReplaceSel( hwnd,TEXT(" [") );
-    Edit_ReplaceSel( hwnd,funcName );
+    if( funcNameW )
+      Edit_ReplaceSel( hwnd,funcNameW );
     Edit_ReplaceSel( hwnd,TEXT("]") );
+    free( funcNameW );
   }
 
   Edit_ReplaceSel( hwnd,TEXT("\r\n") );
 }
 
 static void dlgPrint(
-    uint64_t addr,const char *filename,int lineno,const char *funcname,
+    uint64_t addr,const wchar_t *filename,int lineno,const char *funcname,
     void *context,int columnno )
 {
   struct dialog_info *di = context;
 #ifndef NO_DBGHELP
   char buffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME];
   SYMBOL_INFO *si = (SYMBOL_INFO*)&buffer;
+  wchar_t *dbghelpFilename = NULL;
   if( lineno==DWST_NO_DBG_SYM )
   {
     IMAGEHLP_LINE64 ihl;
@@ -148,7 +155,8 @@ static void dlgPrint(
     DWORD displ;
     if( SymGetLineFromAddr64(GetCurrentProcess(),addr,&displ,&ihl) )
     {
-      filename = ihl.FileName;
+      dbghelpFilename = dwst_ansi2wide( ihl.FileName );
+      filename = dbghelpFilename;
       lineno = ihl.LineNumber;
     }
 
@@ -164,9 +172,9 @@ static void dlgPrint(
   }
 #endif
 
-  const char *delim = strrchr( filename,'/' );
+  const wchar_t *delim = wcsrchr( filename,'/' );
   if( delim ) filename = delim + 1;
-  delim = strrchr( filename,'\\' );
+  delim = wcsrchr( filename,'\\' );
   if( delim ) filename = delim + 1;
 
   void *ptr = (void*)(uintptr_t)addr;
@@ -193,9 +201,13 @@ static void dlgPrint(
       if( ptr ) di->count++;
       break;
   }
+
+#ifndef NO_DBGHELP
+  free( dbghelpFilename );
+#endif
 }
 
-static char *myExtraInfo = NULL;
+static wchar_t *myExtraInfo = NULL;
 
 static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
 {
@@ -296,7 +308,7 @@ static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
   TCHAR hexNum[20];
 
   Edit_ReplaceSel( textHwnd,TEXT("code: 0x") );
-  _stprintf( hexNum,TEXT("%08lX"),code );
+  _stprintf( hexNum,20,TEXT("%08lX"),code );
   Edit_ReplaceSel( textHwnd,hexNum );
   if( desc )
     Edit_ReplaceSel( textHwnd,desc );
@@ -311,14 +323,14 @@ static LONG WINAPI exceptionPrinter( LPEXCEPTION_POINTERS ep )
         flag==8?TEXT("data execution prevention"):
         (flag?TEXT("write access"):TEXT("read access")) );
     Edit_ReplaceSel( textHwnd,TEXT(" violation at 0x") );
-    _stprintf( hexNum,TEXT("%p"),(void*)addr );
+    _stprintf( hexNum,20,TEXT("%p"),(void*)addr );
     Edit_ReplaceSel( textHwnd,hexNum );
     Edit_ReplaceSel( textHwnd,TEXT("\r\n") );
   }
   Edit_ReplaceSel( textHwnd,TEXT("\r\n") );
 
   struct dialog_info di = { 0,textHwnd,NULL };
-  dwstOfException( ep->ContextRecord,&dlgPrint,&di );
+  dwstOfExceptionW( ep->ContextRecord,&dlgPrint,&di );
 
   SendMessage( hwnd,WM_NEXTDLGCTL,(WPARAM)textHwnd,TRUE );
   Edit_SetSel( textHwnd,0,0 );
@@ -344,5 +356,13 @@ void dwstExceptionDialog( const char *extraInfo )
   SetUnhandledExceptionFilter( exceptionPrinter );
 
   free( myExtraInfo );
-  myExtraInfo = extraInfo ? strdup( extraInfo ) : NULL;
+  myExtraInfo = extraInfo ? dwst_ansi2wide( extraInfo ) : NULL;
+}
+
+void dwstExceptionDialogW( const wchar_t *extraInfo )
+{
+  SetUnhandledExceptionFilter( exceptionPrinter );
+
+  free( myExtraInfo );
+  myExtraInfo = extraInfo ? wcsdup( extraInfo ) : NULL;
 }

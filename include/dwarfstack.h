@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,10 @@ typedef void dwstCallback(
     uint64_t addr,const char *filename,int lineno,const char *funcname,
     void *context,int columnno );
 
+typedef void dwstCallbackW(
+    uint64_t addr,const wchar_t *filename,int lineno,const char *funcname,
+    void *context,int columnno );
+
 // special values for lineno:
 
 // DWST_BASE_ADDR: inform about the used image base address
@@ -85,6 +89,11 @@ EXPORT int dwstOfFile(
     uint64_t *addr,int count,
     dwstCallback *callbackFunc,void *callbackContext );
 
+EXPORT int dwstOfFileW(
+    const wchar_t *name,uint64_t imageBase,
+    uint64_t *addr,int count,
+    dwstCallbackW *callbackFunc,void *callbackContext );
+
 
 // dwstOfProcess(): stack information of current process
 //   addr:              stack addresses
@@ -95,6 +104,10 @@ EXPORT int dwstOfProcess(
     uintptr_t *addr,int count,
     dwstCallback *callbackFunc,void *callbackContext );
 
+EXPORT int dwstOfProcessW(
+    uintptr_t *addr,int count,
+    dwstCallbackW *callbackFunc,void *callbackContext );
+
 
 // dwstOfLocation(): stack information of current location
 //   callbackFunc:      callback function
@@ -102,6 +115,9 @@ EXPORT int dwstOfProcess(
 //      (for example see examples/location/)
 EXPORT int dwstOfLocation(
     dwstCallback *callbackFunc,void *callbackContext );
+
+EXPORT int dwstOfLocationW(
+    dwstCallbackW *callbackFunc,void *callbackContext );
 
 
 // dwstOfException(): stack information of exception
@@ -113,12 +129,19 @@ EXPORT int dwstOfException(
     void *context,
     dwstCallback *callbackFunc,void *callbackContext );
 
+EXPORT int dwstOfExceptionW(
+    void *context,
+    dwstCallbackW *callbackFunc,void *callbackContext );
+
 
 // dwstExceptionDialog(): show dialog on unhandled exception
 //   extraInfo:         extra information shown in dialog
 //      (for example see examples/exception-dialog/)
 EXPORT void dwstExceptionDialog(
     const char *extraInfo );
+
+EXPORT void dwstExceptionDialogW(
+    const wchar_t *extraInfo );
 
 
 #ifndef DWST_STATIC

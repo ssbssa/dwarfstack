@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,14 @@ typedef USHORT WINAPI CaptureStackBackTraceFunc( ULONG,ULONG,PVOID*,PULONG );
 
 #define MAX_FRAMES 32
 
-int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
+int dwstOfProcessExt(
+    uintptr_t *addr,int count,
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext );
+
+static int dwstOfLocationExt(
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext )
 {
   uintptr_t frames[MAX_FRAMES];
 
@@ -63,5 +70,17 @@ int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
 #endif
   }
 
-  return( dwstOfProcess(frames,count,callbackFunc,callbackContext) );
+  return( dwstOfProcessExt(frames,count,
+        callbackFunc,callbackFuncW,callbackContext) );
+}
+
+int dwstOfLocation( dwstCallback *callbackFunc,void *callbackContext )
+{
+  return( dwstOfLocationExt(callbackFunc,NULL,callbackContext) );
+}
+
+int dwstOfLocationW(
+    dwstCallbackW *callbackFunc,void *callbackContext )
+{
+  return( dwstOfLocationExt(NULL,callbackFunc,callbackContext) );
 }

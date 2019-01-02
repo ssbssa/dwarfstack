@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,14 +23,21 @@
 #include <windows.h>
 
 
-int dwstOfProcess(
+int dwstOfFileExt(
+    const char *name,const wchar_t *nameW,uint64_t imageBase,
+    uint64_t *addr,int count,
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext );
+
+int dwstOfProcessExt(
     uintptr_t *addr,int count,
-    dwstCallback *callbackFunc,void *callbackContext )
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext )
 {
-  if( !addr || !count || !callbackFunc ) return( 0 );
+  if( !addr || !count || (!callbackFunc && !callbackFuncW) ) return( 0 );
 
   MEMORY_BASIC_INFORMATION mbi;
-  char name[MAX_PATH];
+  wchar_t name[MAX_PATH];
   int s;
   int converted = 0;
   for( s=0; s<count; s++ )
@@ -45,7 +52,7 @@ int dwstOfProcess(
       continue;
 
     void *base = mbi.AllocationBase;
-    if( !GetModuleFileName(base,name,MAX_PATH) )
+    if( !GetModuleFileNameW(base,name,MAX_PATH) )
       continue;
 
     int c;
@@ -69,10 +76,25 @@ int dwstOfProcess(
     uint64_t *addrPos = addr + s;
 #endif
 
-    converted += dwstOfFile(
-        name,(uintptr_t)base,addrPos,c,callbackFunc,callbackContext );
+    converted += dwstOfFileExt(
+        NULL,name,(uintptr_t)base,addrPos,c,
+        callbackFunc,callbackFuncW,callbackContext );
     s += c - 1;
   }
 
   return( converted );
+}
+
+int dwstOfProcess(
+    uintptr_t *addr,int count,
+    dwstCallback *callbackFunc,void *callbackContext )
+{
+  return( dwstOfProcessExt(addr,count,callbackFunc,NULL,callbackContext) );
+}
+
+int dwstOfProcessW(
+    uintptr_t *addr,int count,
+    dwstCallbackW *callbackFunc,void *callbackContext )
+{
+  return( dwstOfProcessExt(addr,count,NULL,callbackFunc,callbackContext) );
 }

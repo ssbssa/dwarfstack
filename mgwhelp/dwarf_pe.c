@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Jose Fonseca
- * Copyright (C) 2013-2016 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,33 @@
 
 #include "config.h"
 #include "dwarf_incl.h"
+
+
+wchar_t *
+dwst_ansi2wide(const char *str)
+{
+    if (!str) return NULL;
+    int len = MultiByteToWideChar(CP_ACP, 0, str, -1, NULL, 0);
+    if (!len) return NULL;
+    wchar_t *strW = malloc(2 * len);
+    if (!strW) return NULL;
+    len = MultiByteToWideChar(CP_ACP, 0, str, -1, strW, len);
+    if (!len) strW[0] = 0;
+    return strW;
+}
+
+char *
+dwst_wide2ansi(const wchar_t *str)
+{
+    if (!str) return NULL;
+    int len = WideCharToMultiByte(CP_ACP, 0, str, -1, NULL, 0, NULL, NULL);
+    if (!len) return NULL;
+    char *strA = malloc(len);
+    if (!strA) return NULL;
+    len = WideCharToMultiByte(CP_ACP, 0, str, -1, strA, len, NULL, NULL);
+    if (!len) strA[0] = 0;
+    return strA;
+}
 
 
 typedef struct {
@@ -128,13 +155,13 @@ pe_methods = {
 
 
 static int
-dwarf_pe_init_link(const char *image,
+dwarf_pe_init_link(const wchar_t *image,
                    Dwarf_Addr *imagebase,
                    Dwarf_Handler errhand,
                    Dwarf_Ptr errarg,
                    Dwarf_Debug *ret_dbg,
                    Dwarf_Error *error,
-                   char *link_path)
+                   wchar_t *link_path)
 {
     int res = 0;
     pe_access_object_t *pe_obj = 0;
@@ -146,7 +173,7 @@ dwarf_pe_init_link(const char *image,
         goto no_internals;
     }
 
-    pe_obj->hFile = CreateFile(image, GENERIC_READ, FILE_SHARE_READ, NULL,
+    pe_obj->hFile = CreateFileW(image, GENERIC_READ, FILE_SHARE_READ, NULL,
                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     if (pe_obj->hFile == INVALID_HANDLE_VALUE) {
         goto no_file;
@@ -225,19 +252,25 @@ dwarf_pe_init_link(const char *image,
                 && !strcmp(section.name, ".gnu_debuglink")
                 && pe_load_section(pe_obj, num_sections, (Dwarf_Small **)&link, NULL) == DW_DLV_OK
                 && link && link[0]) {
-            strcpy(link_path, image);
-            char *delim1 = strrchr(link_path, '/');
-            char *delim2 = strrchr(link_path, '\\');
+            wcscpy(link_path, image);
+            wchar_t *delim1 = wcsrchr(link_path, '/');
+            wchar_t *delim2 = wcsrchr(link_path, '\\');
             if (delim2 > delim1) delim1 = delim2;
             if (delim1) delim1++;
             else delim1 = link_path;
-            strcpy(delim1, link);
-            if (GetFileAttributes(link_path) == INVALID_FILE_ATTRIBUTES) {
-                strcpy(delim1, ".debug/");
-                strcat(delim1, link);
-                if (GetFileAttributes(link_path) == INVALID_FILE_ATTRIBUTES) {
-                    link_path[0] = 0;
+            wchar_t *linkW = dwst_ansi2wide(link);
+            if (linkW) {
+                wcscpy(delim1, linkW);
+                if (GetFileAttributesW(link_path) == INVALID_FILE_ATTRIBUTES) {
+                    wcscpy(delim1, L".debug/");
+                    wcscat(delim1, linkW);
+                    if (GetFileAttributesW(link_path) == INVALID_FILE_ATTRIBUTES) {
+                        link_path[0] = 0;
+                    }
                 }
+                free(linkW);
+            } else {
+                link_path[0] = 0;
             }
         }
 
@@ -262,14 +295,14 @@ no_internals:
 
 
 int
-dwarf_pe_init(const char *image,
+dwarf_pe_init(const wchar_t *image,
               Dwarf_Addr *imagebase,
               Dwarf_Handler errhand,
               Dwarf_Ptr errarg,
               Dwarf_Debug *ret_dbg,
               Dwarf_Error *error)
 {
-    char link_path[MAX_PATH];
+    wchar_t link_path[MAX_PATH];
 
     link_path[0] = 0;
     int res = dwarf_pe_init_link(image, imagebase, errhand, errarg, ret_dbg, error, link_path);

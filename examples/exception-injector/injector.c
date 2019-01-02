@@ -1,5 +1,5 @@
 
-//          Copyright Hannes Domani 2014.
+//          Copyright Hannes Domani 2014-2019.
 // Distributed under the Boost Software License, Version 1.0.
 //    (See accompanying file ../LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
@@ -8,19 +8,19 @@
 #include <stdio.h>
 
 
-#define DWST_DLL  "dwarfstack.dll"
+#define DWST_DLL  L"dwarfstack.dll"
 #define DWST_FUNC "dwstExceptionDialog"
 
 
-typedef HMODULE WINAPI func_LoadLibraryA( LPCSTR lpFileName );
+typedef HMODULE WINAPI func_LoadLibraryW( LPCWSTR lpFileName );
 typedef void *WINAPI func_GetProcAddress( HMODULE hModule,LPCSTR lpProcName );
 typedef void func_dwstExceptionDialog( const char *extraInfo );
 
 typedef struct
 {
-  func_LoadLibraryA *fLoadLibraryA;
+  func_LoadLibraryW *fLoadLibraryW;
   func_GetProcAddress *fGetProcAddress;
-  char texts[2];
+  char texts[3];
 }
 remoteData;
 
@@ -32,12 +32,13 @@ enum {
 
 static DWORD WINAPI remoteCall( remoteData *data )
 {
-  const char *dllName = data->texts;
-  const char *funcName = dllName;
-  while( *funcName ) funcName++;
-  funcName++;
+  const wchar_t *dllName = (wchar_t*)data->texts;
+  const wchar_t *dllNameEnd = dllName;
+  while( *dllNameEnd ) dllNameEnd++;
+  dllNameEnd++;
+  const char *funcName = (const char*)dllNameEnd;
 
-  HMODULE mod = data->fLoadLibraryA( dllName );
+  HMODULE mod = data->fLoadLibraryW( dllName );
   if( !mod ) return( REMOTE_NO_DLL );
 
   func_dwstExceptionDialog *dwstExceptionDialog =
@@ -49,25 +50,25 @@ static DWORD WINAPI remoteCall( remoteData *data )
   return( REMOTE_OK );
 }
 
-static void inject( HANDLE process,const char *dll,const char *func )
+static void inject( HANDLE process,const wchar_t *dll,const char *func )
 {
   size_t funcSize = (size_t)&inject - (size_t)&remoteCall;
   size_t fullSize = funcSize + sizeof(remoteData) +
-    strlen( dll ) + strlen( func );
+    2*wcslen( dll ) + strlen( func );
 
   char *fullData = malloc( fullSize );
   memcpy( fullData,&remoteCall,funcSize );
   remoteData *data = (remoteData*)( fullData+funcSize );
 
   HMODULE kernel32 = GetModuleHandle( "kernel32.dll" );
-  data->fLoadLibraryA =
-    (func_LoadLibraryA*)GetProcAddress( kernel32,"LoadLibraryA" );
+  data->fLoadLibraryW =
+    (func_LoadLibraryW*)GetProcAddress( kernel32,"LoadLibraryW" );
   data->fGetProcAddress =
     (func_GetProcAddress*)GetProcAddress( kernel32,"GetProcAddress" );
 
   char *texts = data->texts;
-  strcpy( texts,dll );
-  texts += strlen( texts ) + 1;
+  wcscpy( (wchar_t*)texts,dll );
+  texts += 2*wcslen( dll ) + 2;
   strcpy( texts,func );
 
   char *fullDataRemote = VirtualAllocEx( process,NULL,
@@ -98,7 +99,7 @@ static void inject( HANDLE process,const char *dll,const char *func )
     switch( exitCode )
     {
       case REMOTE_NO_DLL:
-        printf( "can't find library '%s'\n",dll );
+        printf( "can't find library '%ls'\n",dll );
         break;
 
       case REMOTE_NO_FUNC:
@@ -123,12 +124,12 @@ static int isWrongArch( HANDLE process )
 
 int main( void )
 {
-  char *cmdLine = GetCommandLineA();
-  char *args;
-  if( cmdLine[0]=='"' && (args=strchr(cmdLine+1,'"')) )
+  wchar_t *cmdLine = GetCommandLineW();
+  wchar_t *args;
+  if( cmdLine[0]=='"' && (args=wcschr(cmdLine+1,'"')) )
     args++;
   else
-    args = strchr( cmdLine,' ' );
+    args = wcschr( cmdLine,' ' );
   if( !args || !args[0] )
   {
     printf( "missing argument: application name or process id\n" );
@@ -136,28 +137,28 @@ int main( void )
   }
   while( args[0]==' ' ) args++;
 
-  char dllPath[MAX_PATH];
-  GetModuleFileNameA( NULL,dllPath,MAX_PATH );
-  char *dirEnd = strrchr( dllPath,'\\' );
+  wchar_t dllPath[MAX_PATH];
+  GetModuleFileNameW( NULL,dllPath,MAX_PATH );
+  wchar_t *dirEnd = wcsrchr( dllPath,'\\' );
   if( dirEnd ) dirEnd++;
   else dirEnd = dllPath;
-  strcpy( dirEnd,DWST_DLL );
+  wcscpy( dirEnd,DWST_DLL );
 
-  STARTUPINFO si = {0};
+  STARTUPINFOW si = {0};
   PROCESS_INFORMATION pi = {0};
   si.cb = sizeof(STARTUPINFO);
-  BOOL result = CreateProcess( NULL,args,NULL,NULL,FALSE,
+  BOOL result = CreateProcessW( NULL,args,NULL,NULL,FALSE,
       CREATE_SUSPENDED,NULL,NULL,&si,&pi );
   if( !result )
   {
-    int processId = atoi( args );
+    int processId = _wtoi( args );
 
     HANDLE process = NULL;
     if( processId )
       process = OpenProcess( PROCESS_ALL_ACCESS,FALSE,processId );
     if( !process )
     {
-      printf( "can't create/open process %s\n",args );
+      printf( "can't create/open process %ls\n",args );
       return( 1 );
     }
 
@@ -173,7 +174,7 @@ int main( void )
 
   if( isWrongArch(pi.hProcess) )
   {
-    printf( "application '%s' is of a different architecture\n",args );
+    printf( "application '%ls' is of a different architecture\n",args );
 
     TerminateProcess( pi.hProcess,1 );
   }

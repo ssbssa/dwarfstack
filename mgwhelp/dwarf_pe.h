@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Jose Fonseca
- * Copyright (C) 2013 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,7 @@ extern "C" {
 
 
 int
-dwarf_pe_init(const char *image,
+dwarf_pe_init(const wchar_t *image,
               Dwarf_Addr *imagebase,
               Dwarf_Handler errhand,
               Dwarf_Ptr errarg,
@@ -40,6 +40,13 @@ dwarf_pe_init(const char *image,
 
 int
 dwarf_pe_finish(Dwarf_Debug dbg, Dwarf_Error * error);
+
+
+wchar_t *
+dwst_ansi2wide(const char *str);
+
+char *
+dwst_wide2ansi(const wchar_t *str);
 
 
 #ifdef __cplusplus

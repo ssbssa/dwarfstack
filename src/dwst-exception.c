@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 Hannes Domani
+ * Copyright (C) 2013-2019 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -100,9 +100,15 @@ int captureStackWalk( HANDLE process,CONTEXT *context,
 }
 #endif
 
-int dwstOfException(
+int dwstOfProcessExt(
+    uintptr_t *addr,int count,
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext );
+
+int dwstOfExceptionExt(
     void *context,
-    dwstCallback *callbackFunc,void *callbackContext )
+    dwstCallback *callbackFunc,dwstCallbackW *callbackFuncW,
+    void *callbackContext )
 {
   uintptr_t frames[MAX_FRAMES];
   int count = 0;
@@ -126,11 +132,26 @@ int dwstOfException(
   count += captureStackWalk( process,contextP,frames+count,MAX_FRAMES-count );
 #endif
 
-  count = dwstOfProcess( frames,count,callbackFunc,callbackContext );
+  count = dwstOfProcessExt( frames,count,
+      callbackFunc,callbackFuncW,callbackContext );
 
 #ifndef NO_DBGHELP
   SymCleanup( process );
 #endif
 
   return( count );
+}
+
+int dwstOfException(
+    void *context,
+    dwstCallback *callbackFunc,void *callbackContext )
+{
+  return( dwstOfExceptionExt(context,callbackFunc,NULL,callbackContext) );
+}
+
+int dwstOfExceptionW(
+    void *context,
+    dwstCallbackW *callbackFunc,void *callbackContext )
+{
+  return( dwstOfExceptionExt(context,NULL,callbackFunc,callbackContext) );
 }
