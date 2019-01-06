@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2014-2016 David Anderson. All Rights Reserved.
+  Copyright (C) 2014-2018 David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -36,9 +36,13 @@
 
 
 #include "config.h"
-#include "dwarf_incl.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+#include "dwarf_util.h"
 #include "dwarf_xu_index.h"
 
 #define  HASHSIGNATURELEN 8
@@ -162,7 +166,11 @@ dwarf_get_xu_index_header(Dwarf_Debug dbg,
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
         return (DW_DLV_ERROR);
     }
-    strcpy(indexptr->gx_type,section_type);
+    /*  Only "cu" or "tu" allowed, that is checked above.
+        But for safety we just copy the allowed bytes*/
+    indexptr->gx_type[0] = section_type[0];
+    indexptr->gx_type[1] = section_type[1];
+    indexptr->gx_type[2] = 0;
     indexptr->gx_dbg = dbg;
     indexptr->gx_section_length = sect->dss_size;
     indexptr->gx_section_data   = sect->dss_data;
@@ -623,5 +631,3 @@ dwarf_xu_header_free(Dwarf_Xu_Index_Header indexptr)
         dwarf_dealloc(dbg,indexptr,DW_DLA_XU_INDEX);
     }
 }
-
-

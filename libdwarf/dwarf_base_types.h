@@ -25,10 +25,6 @@
 
 */
 
-
-
-#include "libdwarfdefs.h"
-
 #define true                    1
 #define false                   0
 
@@ -146,6 +142,10 @@ typedef __int32_t Dwarf_sfixed;
 */
 typedef __uint64_t Dwarf_ufixed64;
 typedef __int64_t Dwarf_sfixed64;
+
+#define DWARF_HALF_SIZE 2
+#define DWARF_32BIT_SIZE 4
+#define DWARF_64BIT_SIZE 8
 
 
 typedef struct Dwarf_Abbrev_List_s *Dwarf_Abbrev_List;

@@ -28,7 +28,7 @@
 */
 
 /* Windows specific */
-#ifdef HAVE_STDAFX_H
+#if defined(_WIN32) && defined(HAVE_STDAFX_H)
 #include "stdafx.h"
 #endif /* HAVE_STDAFX_H */
 
@@ -58,17 +58,14 @@
             ((const char *)source) +(srclength)-(len_out),\
             (len_out)) ;                            \
     }
-
-
 #else /* LITTLE ENDIAN */
-
 #define WRITE_UNALIGNED(dbg,dest,source, srclength,len_out) \
     { \
         dbg->de_copy_word( (dest) , \
             ((const char *)source) ,      \
             (len_out)) ;            \
     }
-#endif
+#endif /* BIG- LITTLE-ENDIAN */
 
 
 #if defined(sparc) && defined(sun)
@@ -81,9 +78,9 @@
 #define REL_SEC_PREFIX ".rel"
 #endif
 
+#include <stddef.h>
 #include "dwarf.h"
 #include "libdwarf.h"
-
 #include "pro_opaque.h"
 #include "pro_error.h"
 #include "pro_util.h"

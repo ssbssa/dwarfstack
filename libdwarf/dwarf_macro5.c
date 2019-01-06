@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2015-2016 David Anderson. All Rights Reserved.
+  Copyright (C) 2015-2018 David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -24,12 +24,16 @@
 */
 
 #include "config.h"
-#include "dwarf_incl.h"
 #include <stdio.h>
 #include <limits.h>
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #endif /* HAVE_STDLIB_H */
+
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+#include "dwarf_util.h"
 #include "dwarf_macro5.h"
 
 #define TRUE 1
@@ -142,17 +146,17 @@ _dwarf_skim_forms(Dwarf_Debug dbg,
             break;
         case DW_FORM_block2:
             READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
-                mdata, sizeof(Dwarf_Half),
+                mdata, DWARF_HALF_SIZE,
                 error,section_end);
-            v = ret_value + sizeof(Dwarf_Half);
+            v = ret_value + DWARF_HALF_SIZE;
             totallen += v;
             mdata += v;
             break;
         case DW_FORM_block4:
             READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
-                mdata, sizeof(Dwarf_ufixed),
+                mdata, DWARF_32BIT_SIZE,
                 error,section_end);
-            v = ret_value + sizeof(Dwarf_ufixed);
+            v = ret_value + DWARF_32BIT_SIZE;
             totallen += v;
             mdata += v;
             break;
@@ -319,18 +323,9 @@ _dwarf_get_macro_ops_count_internal(Dwarf_Macro_Context macro_context,
     while (mdata < section_end) {
         Dwarf_Small op = 0;
 
-        if (mdata >= section_end)  {
-            _dwarf_error(dbg, error, DW_DLE_MACRO_PAST_END);
-            return DW_DLV_ERROR;
-        }
         op = *mdata;
         ++opcount;
         ++mdata;
-        /*  Here so we would set it for the zero op,
-            though that is kind of redundant since
-            the curopsentry starts out zero-d.
-            if (build_ops_array)
-                curopsentry->mo_opcode = op;  */
         if (!op) {
             Dwarf_Unsigned opslen = 0;
             /*  End of ops, this is terminator, count the ending 0
@@ -372,7 +367,9 @@ _dwarf_get_macro_ops_count_internal(Dwarf_Macro_Context macro_context,
             _dwarf_error(dbg, error, DW_DLE_MACRO_PAST_END);
             return DW_DLV_ERROR;
         }
-        curopsentry++;
+        if (build_ops_array) {
+            curopsentry++;
+        }
     }
     _dwarf_error(dbg, error, DW_DLE_MACRO_PAST_END);
     return DW_DLV_ERROR;
@@ -510,8 +507,8 @@ dwarf_get_macro_defundef(Dwarf_Macro_Context macro_context,
         *offset = stringoffset;
         *forms_count = lformscount;
         if (res == DW_DLV_ERROR) {
-            return res;
             *macro_string = "<Error: getting local .debug_str>";
+            return res;
         } else if (res == DW_DLV_NO_ENTRY) {
             *macro_string = "<Error: NO_ENTRY on .debug_string (strp)>";
         } else {
@@ -1157,7 +1154,7 @@ _dwarf_internal_macro_context(Dwarf_Die die,
     }
     lres = _dwarf_internal_get_die_comp_dir(die, &comp_dir,
         &comp_name,error);
-    if (resattr == DW_DLV_ERROR) {
+    if (lres == DW_DLV_ERROR) {
         Dwarf_Signed i = 0;
         for (i = 0; i < srcfiles_count; ++i) {
             if(srcfiles[i]) {
@@ -1279,7 +1276,7 @@ _dwarf_internal_macro_context_by_offset(Dwarf_Debug dbg,
         return DW_DLV_ERROR;
     }
 
-    if ((section_base + sizeof(Dwarf_Half) + sizeof(Dwarf_Small)) >                     section_end ) {
+    if ((section_base + DWARF_HALF_SIZE + sizeof(Dwarf_Small)) >                     section_end ) {
         dealloc_macro_srcfiles(srcfiles,srcfilescount);
         _dwarf_error(dbg, error, DW_DLE_MACRO_OFFSET_BAD);
         return DW_DLV_ERROR;
@@ -1290,8 +1287,8 @@ _dwarf_internal_macro_context_by_offset(Dwarf_Debug dbg,
     macro_context->mc_cu_context =  cu_context;
 
     READ_UNALIGNED_CK(dbg,version, Dwarf_Half,
-        macro_data,sizeof(Dwarf_Half),error,section_end);
-    macro_data += sizeof(Dwarf_Half);
+        macro_data, DWARF_HALF_SIZE,error,section_end);
+    macro_data +=  DWARF_HALF_SIZE;
     READ_UNALIGNED_CK(dbg,flags, Dwarf_Small,
         macro_data,sizeof(Dwarf_Small),error,section_end);
     macro_data += sizeof(Dwarf_Small);

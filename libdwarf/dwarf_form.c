@@ -1,7 +1,7 @@
 /*
   Copyright (C) 2000,2002,2004,2005 Silicon Graphics, Inc. All Rights Reserved.
   Portions Copyright 2007-2010 Sun Microsystems, Inc. All rights reserved.
-  Portions Copyright 2008-2017 David Anderson. All rights reserved.
+  Portions Copyright 2008-2018 David Anderson. All rights reserved.
   Portions Copyright 2010-2012 SN Systems Ltd. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
@@ -27,8 +27,11 @@
 */
 
 #include "config.h"
-#include "dwarf_incl.h"
 #include <stdio.h>
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+#include "dwarf_util.h"
 #include "dwarf_die_deliv.h"
 
 #define TRUE 1
@@ -123,6 +126,8 @@ dwarf_uncompress_integer_block(
     char * ptr = 0;
     int remain = 0;
     Dwarf_sfixed * array = 0;
+    Dwarf_Byte_Ptr endptr = (Dwarf_Byte_Ptr)input_block+
+        input_length_in_bytes;
 
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_DBG_NULL);
@@ -148,7 +153,14 @@ dwarf_uncompress_integer_block(
     ptr = input_block;
     while (remain > 0) {
         Dwarf_Word len = 0;
-        _dwarf_decode_s_leb128((unsigned char *)ptr, &len);
+        Dwarf_Signed value = 0;
+        int rres = 0;
+
+        rres = _dwarf_decode_s_leb128_chk((unsigned char *)ptr,
+            &len, &value,endptr);
+        if (rres != DW_DLV_OK) {
+            return ((void *)DW_DLV_BADADDR);
+        }
         ptr += len;
         remain -= len;
         output_length_in_units++;
@@ -178,7 +190,14 @@ dwarf_uncompress_integer_block(
     for (i=0; i<output_length_in_units && remain>0; i++) {
         Dwarf_Signed num;
         Dwarf_Word len;
-        num = _dwarf_decode_s_leb128((unsigned char *)ptr, &len);
+        int sres = 0;
+
+        sres = _dwarf_decode_s_leb128_chk((unsigned char *)ptr,
+            &len, &num,endptr);
+        if (sres != DW_DLV_OK) {
+            dwarf_dealloc(dbg,output_block,DW_DLA_STRING);
+            return ((void *) DW_DLV_BADADDR);
+        }
         ptr += len;
         remain -= len;
         array[i] = num;
@@ -357,19 +376,19 @@ dwarf_formref(Dwarf_Attribute attr,
 
     case DW_FORM_ref2:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Half),
+            attr->ar_debug_ptr, DWARF_HALF_SIZE,
             error,section_end);
         break;
 
     case DW_FORM_ref4:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+            attr->ar_debug_ptr, DWARF_32BIT_SIZE,
             error,section_end);
         break;
 
     case DW_FORM_ref8:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Unsigned),
+            attr->ar_debug_ptr, DWARF_64BIT_SIZE,
             error,section_end);
         break;
 
@@ -406,9 +425,13 @@ dwarf_formref(Dwarf_Attribute attr,
             It is used for precompiled headers.
             The valid condition will be: 'offset == maximumoffset'. */
         Dwarf_Half tag = 0;
-        if (DW_DLV_OK != dwarf_tag(attr->ar_die,&tag,error)) {
-            _dwarf_error(dbg, error, DW_DLE_DIE_BAD);
-            return (DW_DLV_ERROR);
+        int tres = dwarf_tag(attr->ar_die,&tag,error);
+        if (tres != DW_DLV_OK) {
+            if (tres == DW_DLV_NO_ENTRY) {
+                _dwarf_error(dbg, error, DW_DLE_NO_TAG_FOR_DIE);
+                return DW_DLV_ERROR;
+            }
+            return DW_DLV_ERROR;
         }
 
         if (DW_TAG_compile_unit != tag &&
@@ -417,7 +440,7 @@ dwarf_formref(Dwarf_Attribute attr,
             _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_OFFSET_BAD);
             /* Return the incorrect offset for better error reporting */
             *ret_offset = (offset);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
     }
     *ret_offset = (offset);
@@ -531,19 +554,19 @@ dwarf_global_formref(Dwarf_Attribute attr,
 
     case DW_FORM_ref2:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Half),
+            attr->ar_debug_ptr, DWARF_HALF_SIZE,
             error,section_end);
         goto fixoffset;
 
     case DW_FORM_ref4:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+            attr->ar_debug_ptr, DWARF_32BIT_SIZE,
             error,section_end);
         goto fixoffset;
 
     case DW_FORM_ref8:
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Unsigned),
+            attr->ar_debug_ptr, DWARF_64BIT_SIZE,
             error,section_end);
         goto fixoffset;
 
@@ -582,7 +605,7 @@ dwarf_global_formref(Dwarf_Attribute attr,
             return (DW_DLV_ERROR);
         }
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+            attr->ar_debug_ptr, DWARF_32BIT_SIZE,
             error, section_end);
         /* The offset is global. */
         break;
@@ -592,7 +615,7 @@ dwarf_global_formref(Dwarf_Attribute attr,
             return (DW_DLV_ERROR);
         }
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Unsigned),
+            attr->ar_debug_ptr, DWARF_64BIT_SIZE,
             error,section_end);
         /* The offset is global. */
         break;
@@ -610,11 +633,11 @@ dwarf_global_formref(Dwarf_Attribute attr,
             }
             if (length_size == 4) {
                 READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-                    attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+                    attr->ar_debug_ptr, DWARF_32BIT_SIZE,
                     error,section_end);
             } else if (length_size == 8) {
                 READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-                    attr->ar_debug_ptr, sizeof(Dwarf_Unsigned),
+                    attr->ar_debug_ptr, DWARF_64BIT_SIZE,
                     error,section_end);
             } else {
                 _dwarf_error(dbg, error, DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
@@ -625,21 +648,22 @@ dwarf_global_formref(Dwarf_Attribute attr,
     case DW_FORM_sec_offset:
     case DW_FORM_GNU_ref_alt:  /* 2013 GNU extension */
     case DW_FORM_GNU_strp_alt: /* 2013 GNU extension */
-    case DW_FORM_strp_sup:     /* DWARF5 */
+    case DW_FORM_strp_sup:     /* DWARF5, sup string section */
+    case DW_FORM_line_strp:    /* DWARF5, .debug_line_str section */
         {
             /*  DW_FORM_sec_offset first exists in DWARF4.*/
             /*  It is up to the caller to know what the offset
                 of DW_FORM_sec_offset, DW_FORM_strp_sup
-                or DW_FORM_GNU_strp_alt refers to,
+                or DW_FORM_GNU_strp_alt etc refer to,
                 the offset is not going to refer to .debug_info! */
             unsigned length_size = cu_context->cc_length_size;
             if (length_size == 4) {
                 READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-                    attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+                    attr->ar_debug_ptr, DWARF_32BIT_SIZE,
                     error,section_end);
             } else if (length_size == 8) {
                 READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
-                    attr->ar_debug_ptr, sizeof(Dwarf_Unsigned),
+                    attr->ar_debug_ptr, DWARF_64BIT_SIZE,
                     error,section_end);
             } else {
                 _dwarf_error(dbg, error, DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
@@ -670,7 +694,7 @@ dwarf_global_formref(Dwarf_Attribute attr,
     elsewhere.  New May 2014*/
 
 int
-_dwarf_get_addr_index_itself(UNUSEDARG int theform,
+_dwarf_get_addr_index_itself(int theform,
     Dwarf_Small *info_ptr,
     Dwarf_Debug dbg,
     Dwarf_CU_Context cu_context,
@@ -682,8 +706,36 @@ _dwarf_get_addr_index_itself(UNUSEDARG int theform,
 
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
-    DECODE_LEB128_UWORD_CK(info_ptr,index,
-        dbg,error,section_end);
+    switch(theform){
+    case DW_FORM_GNU_addr_index:
+    case DW_FORM_addrx:
+        DECODE_LEB128_UWORD_CK(info_ptr,index,
+            dbg,error,section_end);
+        break;
+    case DW_FORM_addrx1:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 1,
+            error,section_end);
+        break;
+    case DW_FORM_addrx2:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 2,
+            error,section_end);
+        break;
+    case DW_FORM_addrx3:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 3,
+            error,section_end);
+        break;
+    case DW_FORM_addrx4:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 4,
+            error,section_end);
+        break;
+    default:
+        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_NOT_ADDR_INDEX);
+        return DW_DLV_ERROR;
+    }
     *val_out = index;
     return DW_DLV_OK;
 }
@@ -716,9 +768,54 @@ dwarf_get_debug_addr_index(Dwarf_Attribute attr,
     return DW_DLV_ERROR;
 }
 
+static int
+dw_read_index_val_itself(Dwarf_Debug dbg,
+   unsigned theform,
+   Dwarf_Small *info_ptr,
+   Dwarf_Small *section_end,
+   Dwarf_Unsigned *return_index,
+   Dwarf_Error *error)
+{
+    Dwarf_Unsigned index = 0;
+
+    switch(theform) {
+    case DW_FORM_strx:
+    case DW_FORM_GNU_str_index:
+        DECODE_LEB128_UWORD_CK(info_ptr,index,
+            dbg,error,section_end);
+        break;
+    case DW_FORM_strx1:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 1,
+            error,section_end);
+        break;
+    case DW_FORM_strx2:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 2,
+            error,section_end);
+        break;
+    case DW_FORM_strx3:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 3,
+            error,section_end);
+        break;
+    case DW_FORM_strx4:
+        READ_UNALIGNED_CK(dbg, index, Dwarf_Unsigned,
+            info_ptr, 4,
+            error,section_end);
+        break;
+    default:
+        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_NOT_STR_INDEX);
+        return DW_DLV_ERROR;
+    }
+    *return_index = index;
+    return DW_DLV_OK;
+}
+
 /*  Part of DebugFission.  So a dwarf dumper application
     can get the index and print it for the user.
-    A convenience function.  New May 2014*/
+    A convenience function.  New May 2014
+    Also used with DWARF5 forms.  */
 int
 dwarf_get_debug_str_index(Dwarf_Attribute attr,
     Dwarf_Unsigned *return_index,
@@ -729,6 +826,9 @@ dwarf_get_debug_str_index(Dwarf_Attribute attr,
     Dwarf_Debug dbg = 0;
     int res  = 0;
     Dwarf_Byte_Ptr section_end =  0;
+    Dwarf_Unsigned index = 0;
+    Dwarf_Small *info_ptr = 0;
+    int indxres = 0;
 
     res = get_attr_dbg(&dbg,&cu_context,attr,error);
     if (res != DW_DLV_OK) {
@@ -736,20 +836,79 @@ dwarf_get_debug_str_index(Dwarf_Attribute attr,
     }
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
+    info_ptr = attr->ar_debug_ptr;
 
-    if (theform == DW_FORM_strx ||
-        theform == DW_FORM_GNU_str_index) {
-        Dwarf_Unsigned index = 0;
-        Dwarf_Small *info_ptr = attr->ar_debug_ptr;
-
-        DECODE_LEB128_UWORD_CK(info_ptr,index,
-            dbg,error,section_end);
+    indxres = dw_read_index_val_itself(dbg, theform, info_ptr,
+        section_end, &index,error);
+    if (indxres == DW_DLV_OK) {
         *return_index = index;
-        return DW_DLV_OK;
+        return indxres;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_NOT_ADDR_INDEX);
-    return (DW_DLV_ERROR);
+    return indxres;
 }
+
+
+int
+_dwarf_extract_data16(Dwarf_Debug dbg,
+    Dwarf_Small *data,
+    Dwarf_Small *section_start,
+    Dwarf_Small *section_end,
+    Dwarf_Form_Data16  * returned_val,
+    Dwarf_Error *error)
+{
+    Dwarf_Small *data16end = 0;
+
+    data16end = data + sizeof(Dwarf_Form_Data16);
+    if (data  < section_start ||
+        section_end < data16end) {
+        _dwarf_error(dbg, error,DW_DLE_DATA16_OUTSIDE_SECTION);
+        return DW_DLV_ERROR;
+    }
+    memcpy(returned_val, data, sizeof(Dwarf_Form_Data16));
+    return DW_DLV_OK;
+
+}
+
+int
+dwarf_formdata16(Dwarf_Attribute attr,
+    Dwarf_Form_Data16  * returned_val,
+    Dwarf_Error*     error)
+{
+    Dwarf_Half attrform = 0;
+    Dwarf_CU_Context cu_context = 0;
+    Dwarf_Debug dbg = 0;
+    int res  = 0;
+    Dwarf_Small *section_end = 0;
+    Dwarf_Unsigned section_length = 0;
+    Dwarf_Small *section_start = 0;
+
+    if (attr == NULL) {
+        _dwarf_error(NULL, error, DW_DLE_ATTR_NULL);
+        return DW_DLV_ERROR;
+    }
+    if (returned_val == NULL) {
+        _dwarf_error(NULL, error, DW_DLE_ATTR_NULL);
+        return DW_DLV_ERROR;
+    }
+    attrform = attr->ar_attribute_form;
+    if (attrform != DW_FORM_data16) {
+        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
+        return DW_DLV_ERROR;
+    }
+    res  = get_attr_dbg(&dbg,&cu_context,attr,error);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    section_start = _dwarf_calculate_info_section_start_ptr(
+        cu_context,&section_length);
+    section_end = section_start + section_length;
+
+    res = _dwarf_extract_data16(dbg, attr->ar_debug_ptr,
+        section_start, section_end,
+        returned_val,  error);
+    return res;
+}
+
 
 
 
@@ -767,8 +926,12 @@ dwarf_formaddr(Dwarf_Attribute attr,
         return res;
     }
     attrform = attr->ar_attribute_form;
-    if (attrform == DW_FORM_GNU_addr_index ||
-        attrform == DW_FORM_addrx) {
+    if (attrform == DW_FORM_addrx ||
+        attrform == DW_FORM_addrx1 ||
+        attrform == DW_FORM_addrx2 ||
+        attrform == DW_FORM_addrx3 ||
+        attrform == DW_FORM_addrx4 ||
+        attrform == DW_FORM_GNU_addr_index) {
         res = _dwarf_look_in_local_and_tied(
             attrform,
             cu_context,
@@ -808,6 +971,7 @@ dwarf_formflag(Dwarf_Attribute attr,
     Dwarf_Bool * ret_bool, Dwarf_Error * error)
 {
     Dwarf_CU_Context cu_context = 0;
+    Dwarf_Debug dbg = 0;
 
     if (attr == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_NULL);
@@ -819,8 +983,9 @@ dwarf_formflag(Dwarf_Attribute attr,
         _dwarf_error(NULL, error, DW_DLE_ATTR_NO_CU_CONTEXT);
         return (DW_DLV_ERROR);
     }
+    dbg = cu_context->cc_dbg;
 
-    if (cu_context->cc_dbg == NULL) {
+    if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_DBG_NULL);
         return (DW_DLV_ERROR);
     }
@@ -835,7 +1000,7 @@ dwarf_formflag(Dwarf_Attribute attr,
         *ret_bool = *(Dwarf_Small *)(attr->ar_debug_ptr);
         return (DW_DLV_OK);
     }
-    _dwarf_error(cu_context->cc_dbg, error, DW_DLE_ATTR_FORM_BAD);
+    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
     return (DW_DLV_ERROR);
 }
 
@@ -848,6 +1013,7 @@ _dwarf_allow_formudata(unsigned form)
     case DW_FORM_data4:
     case DW_FORM_data8:
     case DW_FORM_udata:
+    case DW_FORM_loclistx:
     return TRUE;
     }
     return FALSE;
@@ -884,7 +1050,7 @@ _dwarf_formudata_internal(Dwarf_Debug dbg,
         So we can just assign to *return_uval. */
     case DW_FORM_data2:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
-            data, sizeof(Dwarf_Half),
+            data, DWARF_HALF_SIZE,
             error,section_end);
         *return_uval = ret_value;
         *bytes_read = 2;
@@ -894,24 +1060,25 @@ _dwarf_formudata_internal(Dwarf_Debug dbg,
     case DW_FORM_data4:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
             data,
-            sizeof(Dwarf_ufixed),
+            DWARF_32BIT_SIZE,
             error,section_end);
         *return_uval = ret_value;
-        *bytes_read = 4;
+        *bytes_read = DWARF_32BIT_SIZE;;
         return DW_DLV_OK;
         }
 
     case DW_FORM_data8:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Unsigned,
             data,
-            sizeof(Dwarf_Unsigned),
+            DWARF_64BIT_SIZE,
             error,section_end);
         *return_uval = ret_value;
-        *bytes_read = 8;
+        *bytes_read = DWARF_64BIT_SIZE;
         return DW_DLV_OK;
         }
         break;
     /* real udata */
+    case DW_FORM_loclistx:
     case DW_FORM_udata: {
         Dwarf_Word leblen = 0;
         DECODE_LEB128_UWORD_LEN_CK(data, ret_value,leblen,
@@ -989,7 +1156,7 @@ dwarf_formsdata(Dwarf_Attribute attr,
     case DW_FORM_data2:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Signed,
             attr->ar_debug_ptr,
-            sizeof(Dwarf_Shalf),
+            DWARF_HALF_SIZE,
             error,section_end);
         *return_sval = (Dwarf_Shalf) ret_value;
         return DW_DLV_OK;
@@ -999,20 +1166,28 @@ dwarf_formsdata(Dwarf_Attribute attr,
     case DW_FORM_data4:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Signed,
             attr->ar_debug_ptr,
-            sizeof(Dwarf_sfixed),
+            DWARF_32BIT_SIZE,
             error,section_end);
-        *return_sval = (Dwarf_sfixed) ret_value;
+        SIGN_EXTEND(ret_value,DWARF_32BIT_SIZE);
+        *return_sval = (Dwarf_Signed) ret_value;
         return DW_DLV_OK;
         }
 
     case DW_FORM_data8:{
         READ_UNALIGNED_CK(dbg, ret_value, Dwarf_Signed,
             attr->ar_debug_ptr,
-            sizeof(Dwarf_Signed),
+            DWARF_64BIT_SIZE,
             error,section_end);
+        /* No SIGN_EXTEND needed, we are filling all bytes already.*/
         *return_sval = (Dwarf_Signed) ret_value;
         return DW_DLV_OK;
         }
+
+    /*  DW_FORM_implicit_const  is a value in the
+        abbreviations, not in the DIEs. */
+    case DW_FORM_implicit_const:
+        *return_sval = attr->ar_implicit_const;
+        return DW_DLV_OK;
 
     case DW_FORM_sdata: {
         Dwarf_Byte_Ptr tmp = attr->ar_debug_ptr;
@@ -1066,16 +1241,16 @@ dwarf_formblock(Dwarf_Attribute attr,
 
     case DW_FORM_block2:
         READ_UNALIGNED_CK(dbg, length, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_Half),
+            attr->ar_debug_ptr, DWARF_HALF_SIZE,
             error,section_end);
-        data = attr->ar_debug_ptr + sizeof(Dwarf_Half);
+        data = attr->ar_debug_ptr + DWARF_HALF_SIZE;
         break;
 
     case DW_FORM_block4:
         READ_UNALIGNED_CK(dbg, length, Dwarf_Unsigned,
-            attr->ar_debug_ptr, sizeof(Dwarf_ufixed),
+            attr->ar_debug_ptr, DWARF_32BIT_SIZE,
             error,section_end);
-        data = attr->ar_debug_ptr + sizeof(Dwarf_ufixed);
+        data = attr->ar_debug_ptr + DWARF_32BIT_SIZE;
         break;
 
     case DW_FORM_block: {
@@ -1144,18 +1319,22 @@ _dwarf_extract_string_offset_via_str_offsets(Dwarf_Debug dbg,
     Dwarf_Unsigned offsetintable = 0;
     Dwarf_Unsigned end_offsetintable = 0;
     int res = 0;
+    int idxres = 0;
 
     res = _dwarf_load_section(dbg, &dbg->de_debug_str_offsets,error);
     if (res != DW_DLV_OK) {
         return res;
     }
+    idxres = dw_read_index_val_itself(dbg,
+        attrform,data_ptr,end_data_ptr,&index_to_offset_entry,error);
+    if ( idxres != DW_DLV_OK) {
+        return idxres;
+    }
 
-    DECODE_LEB128_UWORD_CK(data_ptr,index_to_offset_entry,
-        dbg,error,end_data_ptr);
     /*  DW_FORM_GNU_str_index has no 'base' value.
-        DW_FORM_strx has a base value
+        DW_FORM_strx* has a base value
         for the offset table */
-    if( attrform == DW_FORM_strx) {
+    if( attrform != DW_FORM_GNU_str_index) {
         res = _dwarf_get_string_base_attr_value(dbg,cu_context,
             &offset_base,error);
         if (res != DW_DLV_OK) {
@@ -1213,6 +1392,10 @@ _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
     if (attrform == DW_FORM_strp ||
         attrform == DW_FORM_line_strp ||
         attrform == DW_FORM_GNU_str_index ||
+        attrform == DW_FORM_strx1 ||
+        attrform == DW_FORM_strx2 ||
+        attrform == DW_FORM_strx3 ||
+        attrform == DW_FORM_strx4 ||
         attrform == DW_FORM_strx) {
         /*  The 'offset' into .debug_str or .debug_line_str is given,
             here we turn that into a pointer. */
@@ -1233,7 +1416,7 @@ _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
             secbegin = dbg->de_debug_line_str.dss_data;
             strbegin= dbg->de_debug_line_str.dss_data + offset;
         } else {
-            /* DW_FORM_strp */
+            /* DW_FORM_strp  etc */
             res = _dwarf_load_section(dbg, &dbg->de_debug_str,error);
             if (res != DW_DLV_OK) {
                 return res;
@@ -1360,7 +1543,11 @@ dwarf_formstring(Dwarf_Attribute attr,
         return res;
     }
     case DW_FORM_GNU_str_index:
-    case DW_FORM_strx: {
+    case DW_FORM_strx:
+    case DW_FORM_strx1:
+    case DW_FORM_strx2:
+    case DW_FORM_strx3:
+    case DW_FORM_strx4: {
         Dwarf_Unsigned offsettostr= 0;
         res = _dwarf_extract_string_offset_via_str_offsets(dbg,
             infoptr,

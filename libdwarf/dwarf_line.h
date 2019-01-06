@@ -66,6 +66,9 @@ struct Dwarf_File_Entry_s {
 
     /* Length in bytes of the file. */
     Dwarf_Unsigned fi_file_length;
+
+    Dwarf_Form_Data16   fi_md5_value;
+    char                fi_md5_present;
 };
 
 /*  Part of two-level line tables support. */
@@ -162,6 +165,9 @@ struct Dwarf_Line_Context_s {
     /*  Count of number of source files for this set of Dwarf_Line
         structures. */
     Dwarf_Word lc_file_entry_count;
+    /*  Values Easing the process of indexing through lc_file_entries. */
+    Dwarf_Word lc_file_entry_baseindex;
+    Dwarf_Word lc_file_entry_endindex;
 
 
     /*  Points to the portion of .debug_line section that
@@ -232,7 +238,9 @@ struct Dwarf_Line_Registers_s {
     Dwarf_Unsigned lr_subprogram;     /* EXPERIMENTAL */
 };
 typedef struct Dwarf_Line_Registers_s *Dwarf_Line_Registers;
-void _dwarf_set_line_table_regs_default_values(Dwarf_Line_Registers regs,
+void _dwarf_set_line_table_regs_default_values(
+    Dwarf_Line_Registers regs,
+    unsigned lineversion,
     Dwarf_Bool is_stmt);
 
 

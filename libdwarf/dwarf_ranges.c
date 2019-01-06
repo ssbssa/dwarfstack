@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2008-2016 David Anderson. All Rights Reserved.
+  Copyright (C) 2008-2018 David Anderson. All Rights Reserved.
   Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify it
@@ -27,6 +27,9 @@
 #include "config.h"
 #include <stdlib.h>
 #include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+#include "dwarf_util.h"
 
 struct ranges_entry {
    struct ranges_entry *next;
@@ -45,10 +48,34 @@ free_allocated_ranges( struct ranges_entry *base)
     }
 }
 
+/*  We encapsulate the macro use so we can
+    free local malloc resources that would otherwise
+    leak. See the call points below. */
+static int
+read_unaligned_addr_check(Dwarf_Debug dbg,
+    Dwarf_Addr *addr_out,
+    Dwarf_Small *rangeptr,
+    unsigned address_size,
+    Dwarf_Error *error,
+    Dwarf_Small *section_end)
+{
+    Dwarf_Addr a = 0;
+
+    READ_UNALIGNED_CK(dbg,a,
+        Dwarf_Addr, rangeptr,
+        address_size,
+        error,section_end);
+    *addr_out = a;
+    return DW_DLV_OK;
+}
+
 /*  Ranges are never in a split dwarf object. In the base object
     instead. So use the tied_object if present.
     We return an error which is on the incoming dbg, not
-    the possibly-tied-dbg localdbg. */
+    the possibly-tied-dbg localdbg.
+    If incoming die is NULL there is no context, so do not look
+    for a tied file, and address_size is the size
+    of the overall object, not the address_size of the context. */
 #define MAX_ADDR ((address_size == 8)?0xffffffffffffffffULL:0xffffffff)
 int dwarf_get_ranges_a(Dwarf_Debug dbg,
     Dwarf_Off rangesoffset,
@@ -73,7 +100,7 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
     Dwarf_Debug localdbg = dbg;
     Dwarf_Error localerror = 0;
 
-    if (localdbg->de_tied_data.td_tied_object) {
+    if (die &&localdbg->de_tied_data.td_tied_object) {
         /*  ASSERT: localdbg->de_debug_ranges is missing: DW_DLV_NO_ENTRY.
             So lets not look in dbg. */
         Dwarf_CU_Context context = 0;
@@ -146,15 +173,21 @@ int dwarf_get_ranges_a(Dwarf_Debug dbg,
             return (DW_DLV_ERROR);
         }
         entry_count++;
-        READ_UNALIGNED_CK(localdbg,re->cur.dwr_addr1,
-            Dwarf_Addr, rangeptr,
-            address_size,
-            error,section_end);
+        res = read_unaligned_addr_check(localdbg,&re->cur.dwr_addr1,
+            rangeptr, address_size,error,section_end);
+        if (res != DW_DLV_OK) {
+            free(re);
+            free_allocated_ranges(base);
+            return res;
+        }
         rangeptr +=  address_size;
-        READ_UNALIGNED_CK(localdbg,re->cur.dwr_addr2 ,
-            Dwarf_Addr, rangeptr,
-            address_size,
-            error,section_end);
+        res = read_unaligned_addr_check(localdbg,&re->cur.dwr_addr2,
+            rangeptr, address_size,error,section_end);
+        if (res != DW_DLV_OK) {
+            free(re);
+            free_allocated_ranges(base);
+            return res;
+        }
         rangeptr +=  address_size;
         if (!base) {
             base = re;
@@ -219,4 +252,3 @@ dwarf_ranges_dealloc(Dwarf_Debug dbg, Dwarf_Ranges * rangesbuf,
 {
     dwarf_dealloc(dbg,rangesbuf, DW_DLA_RANGES);
 }
-

@@ -30,6 +30,7 @@ DWARF_SRC_REL = dwarf_alloc.c \
 		dwarf_frame.c \
 		dwarf_frame2.c \
 		dwarf_global.c \
+		dwarf_groups.c \
 		dwarf_harmless.c \
 		dwarf_init_finish.c \
 		dwarf_leb.c \

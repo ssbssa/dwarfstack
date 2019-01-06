@@ -26,9 +26,12 @@
 /*  This provides access to the DWARF5 .debug_names section. */
 
 #include "config.h"
-#include "dwarf_incl.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+#include "dwarf_util.h"
 #include "dwarf_global.h"
 #include "dwarf_dnames.h"
 
@@ -38,14 +41,37 @@
 /*  freedabs attempts to do some cleanup in the face
     of an error. */
 static void
-freedabs(struct Dwarf_D_Abbrev_s *dab) 
+freedabs(struct Dwarf_D_Abbrev_s *dab)
 {
-     struct Dwarf_D_Abbrev_s *tmp = 0;
-     for(; dab; dab = tmp) {
-         tmp = dab->da_next;
-         free(tmp);
-     }
+    struct Dwarf_D_Abbrev_s *tmp = 0;
+    for(; dab; dab = tmp) {
+        tmp = dab->da_next;
+        free(dab);
+    }
 }
+
+/*  Encapsulates DECODE_LEB128_UWORD_CK
+    so the caller can free resources
+    in case of problems. */
+static int
+read_uword_ab(Dwarf_Small **lp,
+    Dwarf_Unsigned *out_p,
+    Dwarf_Debug dbg,
+    Dwarf_Error *err,
+    Dwarf_Small *lpend)
+
+{
+    Dwarf_Small *inptr = *lp;
+    Dwarf_Unsigned out = 0;
+
+    /* The macro updates inptr */
+    DECODE_LEB128_UWORD_CK(inptr,
+        out, dbg,err,lpend);
+    *lp = inptr;
+    *out_p = out;
+    return DW_DLV_OK;
+}
+
 
 static int
 fill_in_abbrevs_table(struct Dwarf_Dnames_index_header_s * dn,
@@ -69,47 +95,60 @@ fill_in_abbrevs_table(struct Dwarf_Dnames_index_header_s * dn,
         Dwarf_Unsigned form = 0;
         Dwarf_Small *inner = 0;
         unsigned idxcount = 0;
+        int res = 0;
 
-        DECODE_LEB128_UWORD_CK(abcur,
-            code,dbg,error,
-            tabend);
+        res = read_uword_ab(&abcur,&code,dbg,error,tabend);
+        if (res != DW_DLV_OK) {
+            freedabs(firstdab);
+            return res;
+        }
         if (code == 0) {
             foundabend = TRUE;
             break;
         }
-        /*  abcur updated by macro */
-        DECODE_LEB128_UWORD_CK(abcur,
-            tag,dbg,error,
-            tabend);
+
+        res = read_uword_ab(&abcur,&tag,dbg,error,tabend);
+        if (res != DW_DLV_OK) {
+            freedabs(firstdab);
+            return res;
+        }
         inner = abcur;
         curdab = (struct Dwarf_D_Abbrev_s *)calloc(1,
             sizeof(struct Dwarf_D_Abbrev_s));
         if(!curdab) {
             freedabs(firstdab);
+            firstdab = 0;
             _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-            return DW_DLV_OK;
+            return DW_DLV_ERROR;
         }
         curdab->da_tag = tag;
         curdab->da_abbrev_code = code;
         abcount++;
         for(;;) {
-            DECODE_LEB128_UWORD_CK(inner,
-                idx,dbg,error,
-                tabend);
-
-            /*  inner updated by macro */
-            DECODE_LEB128_UWORD_CK(inner,
-                form,dbg,error,
-                tabend);
-
+            res = read_uword_ab(&inner,&idx,dbg,error,tabend);
+            if (res != DW_DLV_OK) {
+                free(curdab);
+                freedabs(firstdab);
+                firstdab = 0;
+                return res;
+            }
+            res = read_uword_ab(&inner,&form,dbg,error,tabend);
+            if (res != DW_DLV_OK) {
+                free(curdab);
+                freedabs(firstdab);
+                firstdab = 0;
+                return res;
+            }
             if (!idx && !form) {
                 break;
             }
             if (idxcount >= ABB_PAIRS_MAX) {
+                free(curdab);
                 freedabs(firstdab);
+                firstdab = 0;
                 _dwarf_error(dbg, error,
                     DW_DLE_DEBUG_NAMES_ABBREV_OVERFLOW);
-                return DW_DLV_OK;
+                return DW_DLV_ERROR;
             }
             curdab->da_pairs[idxcount].ap_index = idx;
             curdab->da_pairs[idxcount].ap_form = form;
@@ -117,7 +156,7 @@ fill_in_abbrevs_table(struct Dwarf_Dnames_index_header_s * dn,
         }
         curdab->da_pairs_count = idxcount;
         abcur = inner +1;
-        if (firstdab) {
+        if (!firstdab) {
             firstdab  = curdab;
             lastdab  = curdab;
         } else {
@@ -126,6 +165,7 @@ fill_in_abbrevs_table(struct Dwarf_Dnames_index_header_s * dn,
         }
     }
     if (!foundabend) {
+        freedabs(firstdab);
         _dwarf_error(dbg, error,
             DW_DLE_DEBUG_NAMES_ABBREV_CORRUPTION);
         return DW_DLV_OK;
@@ -146,11 +186,14 @@ fill_in_abbrevs_table(struct Dwarf_Dnames_index_header_s * dn,
         for(ct = 0; ct < abcount; ++ct) {
             struct Dwarf_D_Abbrev_s *tmpb =tmpa->da_next;
             /*  da_next no longer means anything */
-            tmpa->da_next = 0;
             dn->din_abbrev_list[ct] = *tmpa;
-            free(tmpa);
+            dn->din_abbrev_list[ct].da_next = 0;
             tmpa = tmpb;
         }
+        freedabs(firstdab);
+        tmpa = 0;
+        firstdab = 0;
+        lastdab = 0;
         /*  Now the list has turned into an array. We can ignore
             the list aspect. */
     }
@@ -180,21 +223,21 @@ get_inhdr_cur(Dwarf_Dnames_Head dn,
 
 
 static int
-read_uword_val(Dwarf_Debug dbg, 
+read_uword_val(Dwarf_Debug dbg,
     Dwarf_Small **ptr_in,
     Dwarf_Small *endptr,
     int   errcode,
-    Dwarf_ufixed *val_out,
+    Dwarf_Unsigned *val_out,
     Dwarf_Unsigned area_length,
     Dwarf_Error *error)
 {
-    Dwarf_ufixed val = 0;
+    Dwarf_Unsigned val = 0;
     Dwarf_Small *ptr = *ptr_in;
 
-    READ_UNALIGNED_CK(dbg, val, Dwarf_ufixed,
-        ptr, sizeof(Dwarf_ufixed),
+    READ_UNALIGNED_CK(dbg, val, Dwarf_Unsigned,
+        ptr, DWARF_32BIT_SIZE,
         error,endptr);
-    ptr += sizeof(Dwarf_ufixed);
+    ptr += DWARF_32BIT_SIZE;
     if (ptr >= endptr) {
         _dwarf_error(dbg, error,errcode);
         return DW_DLV_ERROR;
@@ -229,13 +272,13 @@ read_a_name_index(Dwarf_Dnames_Head dn,
     Dwarf_Small *end_dnames = 0;
     Dwarf_Half version = 0;
     Dwarf_Half padding = 0;
-    Dwarf_ufixed comp_unit_count = 0;
-    Dwarf_ufixed local_type_unit_count = 0;
-    Dwarf_ufixed foreign_type_unit_count = 0;
-    Dwarf_ufixed bucket_count = 0;
-    Dwarf_ufixed name_count = 0;
-    Dwarf_ufixed abbrev_table_size = 0; /* bytes */
-    Dwarf_ufixed augmentation_string_size = 0; /* bytes */
+    Dwarf_Unsigned comp_unit_count = 0;
+    Dwarf_Unsigned local_type_unit_count = 0;
+    Dwarf_Unsigned foreign_type_unit_count = 0;
+    Dwarf_Unsigned bucket_count = 0;
+    Dwarf_Unsigned name_count = 0;
+    Dwarf_Unsigned abbrev_table_size = 0; /* bytes */
+    Dwarf_Unsigned augmentation_string_size = 0; /* bytes */
     int res = 0;
     const char *str_utf8 = 0;
     Dwarf_Small *curptr = *curptr_in;
@@ -263,9 +306,9 @@ read_a_name_index(Dwarf_Dnames_Head dn,
     end_dnames = curptr + area_length;
 
     READ_UNALIGNED_CK(dbg, version, Dwarf_Half,
-        curptr, sizeof(Dwarf_Half),
+        curptr, DWARF_HALF_SIZE,
         error,end_dnames);
-    curptr += sizeof(Dwarf_Half);
+    curptr += DWARF_HALF_SIZE;
     if (curptr >= end_dnames) {
         _dwarf_error(dbg, error,DW_DLE_DEBUG_NAMES_HEADER_ERROR);
         return DW_DLV_ERROR;
@@ -275,9 +318,9 @@ read_a_name_index(Dwarf_Dnames_Head dn,
         return (DW_DLV_ERROR);
     }
     READ_UNALIGNED_CK(dbg, padding, Dwarf_Half,
-        curptr, sizeof(Dwarf_Half),
+        curptr, DWARF_HALF_SIZE,
         error,end_dnames);
-    curptr += sizeof(Dwarf_Half);
+    curptr += DWARF_HALF_SIZE;
     if (curptr >= end_dnames) {
         _dwarf_error(dbg, error,DW_DLE_DEBUG_NAMES_HEADER_ERROR);
         return DW_DLV_ERROR;
@@ -386,6 +429,7 @@ read_a_name_index(Dwarf_Dnames_Head dn,
                 the padding. */
             for( ; cp < cpend; ++cp) {
                 if(*cp) {
+                    free(di_header);
                     _dwarf_error(dbg, error,
                         DW_DLE_DEBUG_NAMES_PAD_NON_ZERO);
                     return DW_DLV_ERROR;
@@ -420,7 +464,7 @@ read_a_name_index(Dwarf_Dnames_Head dn,
     }
 
     di_header->din_buckets = curptr;
-    curptr +=  sizeof(Dwarf_ufixed) * bucket_count;
+    curptr +=  DWARF_32BIT_SIZE * bucket_count;
     if(curptr > end_dnames) {
         free(di_header->din_augmentation_string);
         free(di_header);
@@ -438,7 +482,7 @@ read_a_name_index(Dwarf_Dnames_Head dn,
     }
 
     di_header->din_string_offsets = curptr;
-    curptr +=  sizeof(Dwarf_ufixed) * name_count;
+    curptr +=  DWARF_32BIT_SIZE * name_count;
     if(curptr > end_dnames) {
         free(di_header->din_augmentation_string);
         free(di_header);
@@ -447,7 +491,7 @@ read_a_name_index(Dwarf_Dnames_Head dn,
     }
 
     di_header->din_entry_offsets = curptr;
-    curptr +=  sizeof(Dwarf_ufixed) * name_count;
+    curptr +=  DWARF_32BIT_SIZE * name_count;
     if(curptr > end_dnames) {
         free(di_header->din_augmentation_string);
         free(di_header);
@@ -503,7 +547,7 @@ free_inhdr_list(struct Dwarf_Dnames_index_header_s *f)
     for multiple CUs or there can be individual indexes
     for some CUs.
     see DWARF5 6.1.1.3 Per_CU versus Per-Module Indexes. */
-int 
+int
 dwarf_debugnames_header(Dwarf_Debug dbg,
     Dwarf_Dnames_Head * dn_out,
     Dwarf_Unsigned    * dn_count_out,
@@ -542,7 +586,7 @@ dwarf_debugnames_header(Dwarf_Debug dbg,
         DW_DLA_DNAMES_HEAD, 1);
     if(!dn_header) {
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     dn_header->dn_section_data = start_section;
     dn_header->dn_section_size = section_size;
@@ -879,11 +923,11 @@ int dwarf_debugnames_bucket(Dwarf_Dnames_Head dn,
     if (index_of_name_entry) {
         Dwarf_Unsigned offsetval = 0;
         Dwarf_Small *ptr = cur->din_buckets +
-            bucket_number * sizeof(Dwarf_ufixed);
+            bucket_number * DWARF_32BIT_SIZE;
         Dwarf_Small *endptr = cur->din_hash_table;
 
         READ_UNALIGNED_CK(dbg, offsetval, Dwarf_Unsigned,
-            ptr, sizeof(Dwarf_ufixed),
+            ptr, DWARF_32BIT_SIZE,
             error,endptr);
         *index_of_name_entry = offsetval;
     }
@@ -936,22 +980,22 @@ dwarf_debugnames_name(Dwarf_Dnames_Head dn,
     if (offset_to_debug_str) {
         Dwarf_Unsigned offsetval = 0;
         Dwarf_Small *ptr = cur->din_string_offsets +
-            name_entry * sizeof(Dwarf_ufixed);
+            name_entry * DWARF_32BIT_SIZE;
         Dwarf_Small *endptr = cur->din_abbreviations;
 
         READ_UNALIGNED_CK(dbg, offsetval, Dwarf_Unsigned,
-            ptr, sizeof(Dwarf_ufixed),
+            ptr, DWARF_32BIT_SIZE,
             error,endptr);
         *offset_to_debug_str = offsetval;
     }
     if (offset_in_entrypool) {
         Dwarf_Unsigned offsetval = 0;
         Dwarf_Small *ptr = cur->din_entry_offsets +
-            name_entry * sizeof(Dwarf_ufixed);
+            name_entry * DWARF_32BIT_SIZE;
         Dwarf_Small *endptr = cur->din_abbreviations;
 
         READ_UNALIGNED_CK(dbg, offsetval, Dwarf_Unsigned,
-            ptr, sizeof(Dwarf_ufixed),
+            ptr, DWARF_32BIT_SIZE,
             error,endptr);
         *offset_in_entrypool = offsetval;
     }

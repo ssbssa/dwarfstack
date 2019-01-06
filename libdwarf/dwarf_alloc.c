@@ -1,6 +1,6 @@
 /*
   Copyright (C) 2000-2005 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2007-2011  David Anderson. All Rights Reserved.
+  Portions Copyright (C) 2007-2018  David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -27,15 +27,18 @@
 #undef  DEBUG
 
 #include "config.h"
-#include "dwarf_incl.h"
 #include <sys/types.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "dwarf_incl.h"
+#include "dwarf_error.h"
+#include "dwarf_alloc.h"
 /*  These files are included to get the sizes
     of structs for malloc.
 */
+#include "dwarf_util.h"
 #include "dwarf_line.h"
 #include "dwarf_global.h"
 #include "dwarf_arange.h"
@@ -54,6 +57,7 @@
 #include "dwarf_macro5.h"
 #include "dwarf_dnames.h"
 #include "dwarf_dsc.h"
+#include "dwarf_str_offsets.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -273,6 +277,8 @@ struct ial_s alloc_instance_basics[ALLOC_AREA_INDEX_TABLE_MAX] = {
     /* 63 DW_DLA_DNAMES_HEAD 0x3f */
     {sizeof(struct Dwarf_Dnames_Head_s),MULTIPLY_NO, 0,
         _dwarf_debugnames_destructor},
+    /* 64 DW_DLA_STR_OFFSETS 0x40 */
+    {sizeof(struct Dwarf_Str_Offsets_Table_s),MULTIPLY_NO, 0,0},
 };
 
 /*  We are simply using the incoming pointer as the key-pointer.
@@ -645,7 +651,10 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)
         dwarf_xu_header_free(dbg->de_tu_hashindex_data);
         dbg->de_tu_hashindex_data = 0;
     }
-
+    if( dbg->de_printf_callback_null_device_handle) {
+        fclose(dbg->de_printf_callback_null_device_handle);
+        dbg->de_printf_callback_null_device_handle = 0;
+    }
     freecontextlist(dbg,&dbg->de_info_reading);
     freecontextlist(dbg,&dbg->de_types_reading);
 
@@ -683,6 +692,7 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)
         free(dbg->de_printf_callback.dp_buffer);
     }
 
+    _dwarf_destroy_group_map(dbg);
     dwarf_tdestroy(dbg->de_alloc_tree,tdestroy_free_node);
     dbg->de_alloc_tree = 0;
     if (dbg->de_tied_data.td_tied_search) {
@@ -716,4 +726,3 @@ _dwarf_special_no_dbg_error_malloc(void)
     e->er_static_alloc = DE_MALLOC;
     return e;
 }
-

@@ -41,15 +41,7 @@ DynamicLibrary {
     ]
     Group {
         name: "libdwarf"
-        prefix: "libdwarf/"
-        files: [
-            "dwarf_*.c",
-            "pro_encode_nm.c",
-        ]
-        excludeFiles: [
-            "dwarf_errmsg_list.c",
-            "dwarf_line_table_reader_common.c",
-        ]
+        files: "libdwarf/*.c"
     }
 
     Group {

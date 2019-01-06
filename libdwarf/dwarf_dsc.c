@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016-2016 David Anderson. All Rights Reserved.
+  Copyright (C) 2016-2018 David Anderson. All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -24,14 +24,14 @@
 */
 
 #include "config.h"
-#include "dwarf_incl.h"
-#ifdef HAVE_ELF_H
-#include <elf.h>
-#endif
 #include <stdio.h>
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #endif
+
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
 #include "dwarf_util.h"
 #include "dwarf_dsc.h"
 
@@ -183,7 +183,7 @@ int dwarf_discr_list(Dwarf_Debug dbg,
 
     ary = (struct Dwarf_Dsc_Entry_s *)calloc(arraycount,
         sizeof(struct Dwarf_Dsc_Entry_s));
-    if(!h) {
+    if(!ary) {
         dwarf_dealloc(dbg,h,DW_DLA_DSC_HEAD);
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
         return DW_DLV_ERROR;
@@ -284,4 +284,3 @@ _dwarf_dsc_destructor(void *m)
     free(h->dsh_block);
     h->dsh_block = 0;
 }
-

@@ -25,24 +25,21 @@
 
 */
 
-
-
 #include "config.h"
-#include "dwarf_incl.h"
-#ifdef HAVE_ELF_H
-#include <elf.h>
-#endif
-
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdlib.h>
 
+#include "dwarf_incl.h"
+#include "dwarf_alloc.h"
+#include "dwarf_error.h"
+
 /* Array to hold string representation of errors. Any time a
    define is added to the list in libdwarf.h, a string should be
    added to this Array
 */
-#include "dwarf_errmsg_list.c"
+#include "dwarf_errmsg_list.h"
 
 /*  This function performs error handling as described in the
     libdwarf consumer document section 3.  Dbg is the Dwarf_debug
@@ -119,11 +116,20 @@ _dwarf_error(Dwarf_Debug dbg, Dwarf_Error * error, Dwarf_Sword errval)
 Dwarf_Unsigned
 dwarf_errno(Dwarf_Error error)
 {
-    if (error == NULL) {
+    if (!error) {
         return (0);
     }
-
     return (error->er_errval);
+}
+
+char*
+dwarf_errmsg_by_number(Dwarf_Unsigned errornum )
+{
+    if (errornum >=
+        (Dwarf_Signed)(sizeof(_dwarf_errmsgs) / sizeof(char *))) {
+        return "Dwarf_Error value out of range";
+    }
+    return ((char *) _dwarf_errmsgs[errornum]);
 }
 
 
@@ -132,14 +138,8 @@ dwarf_errno(Dwarf_Error error)
 char *
 dwarf_errmsg(Dwarf_Error error)
 {
-    if (error == NULL) {
+    if (!error) {
         return "Dwarf_Error is NULL";
     }
-
-    if (error->er_errval >=
-        (Dwarf_Signed)(sizeof(_dwarf_errmsgs) / sizeof(char *))) {
-        return "Dwarf_Error value out of range";
-    }
-
-    return ((char *) _dwarf_errmsgs[error->er_errval]);
+    return  dwarf_errmsg_by_number(error->er_errval);
 }

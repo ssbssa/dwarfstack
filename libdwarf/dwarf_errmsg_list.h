@@ -1,7 +1,6 @@
 /*
-
   Copyright (C) 2000-2005 Silicon Graphics, Inc. All Rights Reserved.
-  Portions Copyright (C) 2008-2016 David Anderson.  All Rights Reserved.
+  Portions Copyright (C) 2008-2018 David Anderson.  All Rights Reserved.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of version 2.1 of the GNU Lesser General Public License
@@ -24,15 +23,9 @@
   USA.
 
 */
+#ifndef DWARF_ERRMSG_LIST_H
+#define DWARF_ERRMSG_LIST_H
 
-#ifdef TESTING
-#include "config.h"
-#include "dwarf_incl.h"
-#include <stdio.h>
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>  /* For exit(), strtoul() declaration etc. */
-#endif
-#endif  /* TESTING */
 
 /* Array to hold string representation of errors. Any time a
    define is added to the list in libdwarf.h, a string should be
@@ -224,7 +217,7 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_ELF_GETIDENT_ERROR (148)",
     "DW_DLE_NO_AT_MIPS_FDE (149)",
     "DW_DLE_NO_CIE_FOR_FDE (150)",
-    "DW_DLE_DIE_ABBREV_LIST_NULL (151)",
+    "DW_DLE_DIE_ABBREV_LIST_NULL (151) No abbrev exists for the requested abbrev code" ,
     "DW_DLE_DEBUG_FUNCNAMES_DUPLICATE (152)",
     "DW_DLE_DEBUG_FUNCNAMES_NULL (153) .debug_funcnames section present but "
         "elf_getdata() failed or section is zero-length",
@@ -460,253 +453,53 @@ const char *_dwarf_errmsgs[] = {
     "DW_DLE_DEBUG_NAMES_BAD_INDEX_ARG(379) index outside valid range",
     "DW_DLE_DEBUG_NAMES_ENTRYPOOL_OFFSET(380) offset outside entrypool",
     "DW_DLE_DEBUG_NAMES_UNHANDLED_FORM(381) Might be corrupt dwarf or incomplete DWARF support",
+    "DW_DLE_LNCT_CODE_UNKNOWN(382)",
+    "DW_DLE_LNCT_FORM_CODE_NOT_HANDLED(383) Might be bad form or just not implemented",
+    "DW_DLE_LINE_HEADER_LENGTH_BOTCH(384) Internal libdwarf error",
+    "DW_DLE_STRING_HASHTAB_IDENTITY_ERROR(385) Internal libdwarf error",
+    "DW_DLE_UNIT_TYPE_NOT_HANDLED(386) Possibly incomplete dwarf5 support",
+    "DW_DLE_GROUP_MAP_ALLOC(387) Out of malloc space",
+    "DW_DLE_GROUP_MAP_DUPLICATE(388) Each section # should appear once",
+    "DW_DLE_GROUP_COUNT_ERROR(389) An inconsistency in map entry count",
+    "DW_DLE_GROUP_INTERNAL_ERROR(390) libdwarf data corruption",
+    "DW_DLE_GROUP_LOAD_ERROR(391) corrupt data?",
+    "DW_DLE_GROUP_LOAD_READ_ERROR(392)",
+    "DW_DLE_AUG_DATA_LENGTH_BAD(393) Data does not fit in section",
+    "DW_DLE_ABBREV_MISSING(394) Unable to find abbrev for DIE",
+    "DW_DLE_NO_TAG_FOR_DIE(395)",
+    "DW_DLE_LOWPC_WRONG_CLASS(396) found in dwarf_lowpc()",
+    "DW_DLE_HIGHPC_WRONG_FORM(397) found in dwarf_highpc()",
+    "DW_DLE_STR_OFFSETS_BASE_WRONG_FORM(398)",
+    "DW_DLE_DATA16_OUTSIDE_SECTION(399)",
+    "DW_DLE_LNCT_MD5_WRONG_FORM(400)",
+    "DW_DLE_LINE_HEADER_CORRUPT(401) possible data corruption",
+    "DW_DLE_STR_OFFSETS_NULLARGUMENT(402) improper call",
+    "DW_DLE_STR_OFFSETS_NULL_DBG(403) improper call",
+    "DW_DLE_STR_OFFSETS_NO_MAGIC(404) improper call",
+    "DW_DLE_STR_OFFSETS_ARRAY_SIZE(405) Not a multiple of entry size",
+    "DW_DLE_STR_OFFSETS_VERSION_WRONG(406) Must be 5 ",
+    "DW_DLE_STR_OFFSETS_ARRAY_INDEX_WRONG(407) Requested outside bound",
+    "DW_DLE_STR_OFFSETS_EXTRA_BYTES(408) Unused non-zero bytes end section",
+    "DW_DLE_DUP_ATTR_ON_DIE(409) Compiler error, object improper DWARF",
+    "DW_DLE_SECTION_NAME_BIG(410) Caller provided insufficient room for section name",
+    "DW_DLE_FILE_UNAVAILABLE(411). Unable find/read object file",
+    "DW_DLE_FILE_WRONG_TYPE(412). Not an object type we recognize.",
+    "DW_DLE_SIBLING_OFFSET_WRONG(413). Corrupt dwarf.",
+    "DW_DLE_OPEN_FAIL(414) Unable to open, possibly a bad filename",
+    "DW_DLE_OFFSET_SIZE(415) Offset size is neither 32 nor 64",
+    "DW_DLE_MACH_O_SEGOFFSET_BAD(416) corrupt object",
+    "DW_DLE_FILE_OFFSET_BAD(417) corrupt object",
+    "DW_DLE_SEEK_ERROR(418). Seek in object file failed",
+    "DW_DLE_READ_ERROR(419). Read from object file failed.",
+    "DW_DLE_ELF_CLASS_BAD(420) Corrupt object.",
+    "DW_DLE_ELF_ENDIAN_BAD(421) Corrupt object.",
+    "DW_DLE_ELF_VERSION_BAD(422) Corrupt object.",
+    "DW_DLE_FILE_TOO_SMALL(423) File is too small to be an object file.",
+    "DW_DLE_PATH_SIZE_TOO_SMALL(424) buffer passed to dwarf_object_detector_path is too small.",
+    "DW_DLE_BAD_TYPE_SIZE(425) At compile time the build configured itself improperly.",
+    "DW_DLE_PE_SIZE_SMALL(426) File too small to be valid PE object.",
+    "DW_DLE_PE_OFFSET_BAD(427) Calculated offset too large. Corrupt object.",
+    "DW_DLE_PE_STRING_TOO_LONG(428) Increase size for call.",
+    "DW_DLE_IMAGE_FILE_UNKNOWN_TYPE(429) a PE object has an unknown machine type, not 0x14c, 0x200 or 0x8664",
 };
-
-#ifdef TESTING
-#define FALSE 0
-#define TRUE 1
-/* This is just to help localize the error. */
-static void
-printone(int i)
-{
-    int arraysize = sizeof(_dwarf_errmsgs) / sizeof(char *);
-    if ( i >= arraysize) {
-        printf("%d is outside the array! Missing something!\n",i);
-    } else {
-        printf("%d is: %s\n",i,_dwarf_errmsgs[i]);
-    }
-}
-
-/* Arbitrary. A much smaller max length value would work. */
-#define MAX_NUM_LENGTH 12
-
-/* return TRUE on error */
-static int
-check_errnum_mismatches(unsigned i)
-{
-    unsigned nextstop = 0;
-    const char *sp = _dwarf_errmsgs[i];
-    const char *cp = sp;
-    unsigned innit = FALSE;
-    unsigned prevchar = 0;
-    unsigned value = 0;
-
-    for( ; *cp; cp++) {
-        unsigned c = 0;
-        c = 0xff & *cp;
-        if ( c >= '0' && c <= '9' && !innit
-            && prevchar != '(') {
-            /* Skip. number part of macro name. */
-            prevchar = c;
-            continue;
-        }
-        if ( c >= '0' && c <= '9') {
-            value = value * 10;
-            value += (c - '0');
-            nextstop++;
-            if (nextstop > MAX_NUM_LENGTH) {
-                break;
-            }
-            innit = TRUE;
-        } else {
-            if (innit) {
-                break;
-            }
-            prevchar= c;
-        }
-    }
-    if (innit) {
-        if (i != value) {
-            return TRUE;
-        }
-        return FALSE;
-    }
-    /* There is no number to check. Ignore it. */
-    printf("mismatch value %d has no errnum to check %s\n",i,_dwarf_errmsgs[i]);
-    return TRUE;
-}
-
-/* We don't allow arbitrary DW_DLE line length. */
-#define MAXDEFINELINE 200
-
-static int
-splmatches(char *base, unsigned baselen,char *test)
-{
-    if (baselen != strlen(test) ) {
-        return FALSE;
-    }
-    for ( ; *test; ++test,++base) {
-        if (*test != *base) {
-            return FALSE;
-        }
-    }
-    return TRUE;
-}
-
-static void
-check_dle_list(const char *path)
-{
-    /*  The format should be
-        #define<space>name<spaces>number<spaces>optional-c-comment
-        and we are intentionally quite rigid about it all except
-        that the number of spaces before any comment is allowed. */
-    char buffer[MAXDEFINELINE];
-    unsigned linenum = 0;
-    unsigned long prevdefval = 0;
-    unsigned foundlast = 0;
-    unsigned foundlouser = 0;
-    FILE*fin = 0;
-
-    fin = fopen(path, "r");
-    if(!fin) {
-        printf("Unable to open define list %s\n",path);
-        exit(1);
-    }
-    for(;;++linenum) {
-        char *line = 0;
-        unsigned linelen = 0;
-        char *  curdefname = 0;
-        char *  pastname = 0;
-        unsigned curdefname_len = 0;
-        char *numstart = 0;
-        char * endptr = 0;
-        unsigned long v = 0;
-
-        line = fgets(buffer,MAXDEFINELINE,fin);
-        if(!line) {
-            break;
-        }
-        linelen = strlen(line);
-        if (linelen >= (unsigned)(MAXDEFINELINE-1)) {
-            printf("define line %u is too long!\n",linenum);
-            exit(1);
-        }
-        if(strncmp(line,"#define DW_DLE_",15)) {
-            printf("define line %u has wrong leading chars!\n",linenum);
-            exit(1);
-        }
-        curdefname = line+8;
-        /* ASSERT: line ends with NUL byte. */
-        for( ; ; curdefname_len++) {
-            if (foundlouser) {
-                printf("define line %u has  stuff after DW_DLE_LO_USER!\n",
-                    linenum);
-                exit(1);
-            }
-            pastname = curdefname +curdefname_len;
-            if (!*pastname) {
-                /* At end of line. Missing value. */
-                printf("define line %u has no number value!\n",linenum);
-                exit(1);
-            }
-            if (*pastname == ' ') {
-                /* Ok. Now look for value. */
-                numstart = pastname + 1;
-                break;
-            }
-        }
-        /* strtoul skips leading whitespace. */
-        v = strtoul(numstart,&endptr,0);
-        /*  This test is a bit odd. But is valid till
-            we decide it is inappropriate. */
-        if (v > DW_DLE_LO_USER) {
-            printf("define line %u: number value unreasonable. %lu\n",
-                linenum,v);
-            exit(1);
-        }
-        if (v == 0 && endptr == numstart) {
-            printf("define line %u: number value missing.\n",
-                linenum);
-            exit(1);
-        }
-        if (*endptr != ' ' && *endptr != '\n') {
-            printf("define line %u: number value terminates oddly\n",
-                linenum);
-            exit(1);
-        }
-        if (splmatches(curdefname,curdefname_len,"DW_DLE_LAST")) {
-            if (foundlast) {
-                printf("duplicated DW_DLE_LAST! line %u\n",linenum);
-                exit(1);
-            }
-            foundlast = 1;
-            if (v != prevdefval) {
-                printf("Invalid: Last value mismatch! %lu vs %lu\n",
-                    v,prevdefval);
-            }
-        } else if (splmatches(curdefname,curdefname_len,"DW_DLE_LO_USER")) {
-            if (!foundlast) {
-                printf("error:expected DW_DLE_LO_USER after LAST! line %u\n",
-                    linenum);
-                exit(1);
-            }
-            if (foundlouser) {
-                printf("Error:duplicated DW_DLE_LO_USER! line %u\n",
-                    linenum);
-                exit(1);
-            }
-            foundlouser = 1;
-            continue;
-        } else {
-            if (linenum > 0) {
-                if (v != prevdefval+1) {
-                    printf("Invalid: Missing value! %lu vs %lu\n",
-                        prevdefval,v);
-                    exit(1);
-                }
-            }
-            prevdefval = v;
-        }
-        /* Ignoring rest of line for now. */
-    }
-    fclose(fin);
-}
-
-int
-main(int argc, char **argv)
-{
-    unsigned arraysize = sizeof(_dwarf_errmsgs) / sizeof(char *);
-    unsigned i = 0;
-    const char *path = 0;
-
-    if (argc != 3) {
-        printf("Expected -f <filename> of DW_DLE lines from libdwarf.h");
-        exit(1);
-    }
-    if (strcmp(argv[1],"-f")) {
-        printf("Expected -f");
-        exit(1);
-    }
-    path = argv[2];
-    check_dle_list(path);
-
-
-    if (arraysize != (DW_DLE_LAST + 1)) {
-        printf("Missing or extra entry in dwarf error strings array"
-            " %u expected DW_DLE_LAST+1 %d\n",arraysize, DW_DLE_LAST+1);
-        printone(1);
-        printone(100);
-        printone(200);
-        printone(250);
-        printone(260);
-        printone(262);
-        printone(263);
-        printone(264);
-        printone(265);
-        printone(273);
-        printone(274);
-        printone(275);
-        printone(300);
-        printone(328);
-        exit(1);
-    }
-    for ( i = 0; i <= DW_DLE_LAST; ++i) {
-        if(check_errnum_mismatches(i)) {
-            printf("mismatch value %d is: %s\n",i,_dwarf_errmsgs[i]);
-            exit(1);
-        }
-    }
-    /* OK. */
-    exit(0);
-}
-#endif /* TESTING */
+#endif /* DWARF_ERRMSG_LIST_H */
