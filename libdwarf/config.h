@@ -98,8 +98,11 @@
 /* Define 1 if want to allow Windows full path detection */
 #define HAVE_WINDOWS_PATH 1
 
-/* Define 1 if zlib (decompression library) seems available. */
+/* Define 1 if zlib (decompression library) is available. */
 #define HAVE_ZLIB 1
+
+/* Define 1 if zlib.h header file is available. */
+#define HAVE_ZLIB_H 1
 
 /* See if __uint32_t is predefined in the compiler. */
 /* #undef HAVE___UINT32_T */

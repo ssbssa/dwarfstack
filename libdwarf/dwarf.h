@@ -1,30 +1,32 @@
 /*
-  Copyright (C) 2000-2006 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright 2002-2010 Sun Microsystems, Inc. All rights reserved.
-  Portions Copyright 2007-2017 David Anderson. All rights reserved.
+Copyright (C) 2000-2006 Silicon Graphics, Inc.  All Rights Reserved.
+Portions Copyright 2002-2010 Sun Microsystems, Inc. All rights reserved.
+Portions Copyright 2007-2021 David Anderson. All rights reserved.
 
-  This program is free software; you can redistribute it and/or modify it
-  under the terms of version 2.1 of the GNU Lesser General Public License
-  as published by the Free Software Foundation.
+This program is free software; you can redistribute it
+and/or modify it under the terms of version 2.1 of the
+GNU Lesser General Public License as published by the Free
+Software Foundation.
 
-  This program is distributed in the hope that it would be useful, but
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+This program is distributed in the hope that it would be
+useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE.
 
-  Further, this software is distributed without any warranty that it is
-  free of the rightful claim of any third person regarding infringement
-  or the like.  Any license provided herein, whether implied or
-  otherwise, applies only to this software file.  Patent licenses, if
-  any, provided herein do not apply to combinations of this program with
-  other software, or any other product whatsoever.
+Further, this software is distributed without any warranty
+that it is free of the rightful claim of any third person
+regarding infringement or the like.  Any license provided
+herein, whether implied or otherwise, applies only to this
+software file.  Patent licenses, if any, provided herein
+do not apply to combinations of this program with other
+software, or any other product whatsoever.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this program; if not, write the Free Software
-  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
-  USA.
-
+You should have received a copy of the GNU Lesser General
+Public License along with this program; if not, write the
+Free Software Foundation, Inc., 51 Franklin Street - Fifth
+Floor, Boston MA 02110-1301, USA.
 */
-
+/* Latest update 2021-02-23 with DW_AT_ghs_* entries. */
 
 #ifndef __DWARF_H
 #define __DWARF_H
@@ -49,13 +51,12 @@ extern "C" {
     always use a 'vendor id' string in extension names.
 
     Vendors should use a vendor string in names and
-    whereever possible avoid duplicating values used by
+    wherever possible avoid duplicating values used by
     other vendor extensions
 
     The DWARF1 comments indicate values unused in
     DWARF2 and later but used or reserved in DWARF1.
 */
-
 
 #define DW_TAG_array_type               0x01
 #define DW_TAG_class_type               0x02
@@ -103,7 +104,7 @@ extern "C" {
         /*  Early releases of this header had the following
             misspelled with a trailing 's' */
 #define DW_TAG_namelist_item            0x2c /* DWARF3/2 spelling */
-#define DW_TAG_namelist_items           0x2c /* SGI misspelling/typo */
+#define DW_TAG_namelist_items           0x2c /*SGI misspelling/typo*/
 #define DW_TAG_packed_type              0x2d
 #define DW_TAG_subprogram               0x2e
         /*  The DWARF2 document had two spellings of the following
@@ -126,7 +127,7 @@ extern "C" {
 #define DW_TAG_partial_unit             0x3c  /* DWARF3 */
 #define DW_TAG_imported_unit            0x3d  /* DWARF3 */
         /*  Do not use DW_TAG_mutable_type */
-#define DW_TAG_mutable_type 0x3e /* Withdrawn from DWARF3 by DWARF3f. */
+#define DW_TAG_mutable_type 0x3e /*Withdrawn from DWARF3 by DWARF3f*/
 #define DW_TAG_condition                0x3f  /* DWARF3f */
 #define DW_TAG_shared_type              0x40  /* DWARF3f */
 #define DW_TAG_type_unit                0x41  /* DWARF4 */
@@ -144,7 +145,8 @@ extern "C" {
 
 #define DW_TAG_MIPS_loop                0x4081
 
-/* HP extensions: ftp://ftp.hp.com/pub/lang/tools/WDB/wdb-4.0.tar.gz  */
+/*  HP extensions: ftp://ftp.hp.com/pub/lang/tools/\
+    WDB/wdb-4.0.tar.gz  */
 #define DW_TAG_HP_array_descriptor      0x4090 /* HP */
 
 /* GNU extensions.  The first 3 missing the GNU_. */
@@ -163,24 +165,6 @@ extern "C" {
 #define DW_TAG_GNU_call_site                    0x4109 /* GNU */
 #define DW_TAG_GNU_call_site_parameter          0x410a /* GNU */
 
-/* ALTIUM extensions */
-    /* DSP-C/Starcore __circ qualifier */
-#define DW_TAG_ALTIUM_circ_type         0x5101 /* ALTIUM */
-    /* Starcore __mwa_circ qualifier */
-#define DW_TAG_ALTIUM_mwa_circ_type     0x5102 /* ALTIUM */
-    /* Starcore __rev_carry qualifier */
-#define DW_TAG_ALTIUM_rev_carry_type    0x5103 /* ALTIUM */
-    /* M16 __rom qualifier */
-#define DW_TAG_ALTIUM_rom               0x5111 /* ALTIUM */
-
-/* The following 3 are extensions to support UPC */
-#define DW_TAG_upc_shared_type          0x8765 /* UPC */
-#define DW_TAG_upc_strict_type          0x8766 /* UPC */
-#define DW_TAG_upc_relaxed_type         0x8767 /* UPC */
-
-/* PGI (STMicroelectronics) extensions. */
-#define DW_TAG_PGI_kanji_type           0xa000 /* PGI */
-#define DW_TAG_PGI_interface_block      0xa020 /* PGI */
 /* The following are SUN extensions */
 #define DW_TAG_SUN_function_template    0x4201 /* SUN */
 #define DW_TAG_SUN_class_template       0x4202 /* SUN */
@@ -196,6 +180,39 @@ extern "C" {
 #define DW_TAG_SUN_f90_interface        0x420c /* SUN */
 #define DW_TAG_SUN_fortran_vax_structure 0x420d /* SUN */
 #define DW_TAG_SUN_hi                   0x42ff /* SUN */
+
+/* ALTIUM extensions */
+    /* DSP-C/Starcore __circ qualifier */
+#define DW_TAG_ALTIUM_circ_type         0x5101 /* ALTIUM */
+    /* Starcore __mwa_circ qualifier */
+#define DW_TAG_ALTIUM_mwa_circ_type     0x5102 /* ALTIUM */
+    /* Starcore __rev_carry qualifier */
+#define DW_TAG_ALTIUM_rev_carry_type    0x5103 /* ALTIUM */
+    /* M16 __rom qualifier */
+#define DW_TAG_ALTIUM_rom               0x5111 /* ALTIUM */
+
+#define DW_TAG_LLVM_annotation          0x6000 /* September 2021*/
+
+/* GHS C */
+#define DW_TAG_ghs_namespace            0x8004
+#define DW_TAG_ghs_using_namespace      0x8005
+#define DW_TAG_ghs_using_declaration    0x8006
+#define DW_TAG_ghs_template_templ_param 0x8007
+
+/* The following 3 are extensions to support UPC */
+#define DW_TAG_upc_shared_type          0x8765 /* UPC */
+#define DW_TAG_upc_strict_type          0x8766 /* UPC */
+#define DW_TAG_upc_relaxed_type         0x8767 /* UPC */
+
+/* PGI (STMicroelectronics) extensions. */
+#define DW_TAG_PGI_kanji_type           0xa000 /* PGI */
+#define DW_TAG_PGI_interface_block      0xa020 /* PGI */
+
+#define DW_TAG_BORLAND_property             0xb000
+#define DW_TAG_BORLAND_Delphi_string        0xb001
+#define DW_TAG_BORLAND_Delphi_dynamic_array 0xb002
+#define DW_TAG_BORLAND_Delphi_set           0xb003
+#define DW_TAG_BORLAND_Delphi_variant       0xb004
 
 #define DW_TAG_hi_user                  0xffff
 
@@ -251,10 +268,16 @@ extern "C" {
 #define DW_FORM_addrx3                  0x2b /* DWARF5 */
 #define DW_FORM_addrx4                  0x2c /* DWARF5 */
 
-#define DW_FORM_GNU_addr_index          0x1f01 /* GNU extension in debug_info.dwo.*/
-#define DW_FORM_GNU_str_index           0x1f02 /* GNU extension, somewhat like DW_FORM_strp */
-#define DW_FORM_GNU_ref_alt             0x1f20 /* GNU extension. Offset in .debug_info. */
-#define DW_FORM_GNU_strp_alt            0x1f21 /* GNU extension. Offset in .debug_str of another object file. */
+/* Extensions http://gcc.gnu.org/wiki/DebugFission.  */
+#define DW_FORM_GNU_addr_index 0x1f01 /* GNU,  debug_info.dwo.*/
+
+/* GNU, somewhat like DW_FORM_strp */
+#define DW_FORM_GNU_str_index  0x1f02
+
+#define DW_FORM_GNU_ref_alt  0x1f20 /* GNU, Offset in .debug_info. */
+
+/* GNU extension. Offset in .debug_str of another object file. */
+#define DW_FORM_GNU_strp_alt 0x1f21
 
 #define DW_AT_sibling                           0x01
 #define DW_AT_location                          0x02
@@ -323,7 +346,7 @@ extern "C" {
 #define DW_AT_frame_base                        0x40
 #define DW_AT_friend                            0x41
 #define DW_AT_identifier_case                   0x42
-#define DW_AT_macro_info                        0x43 /* DWARF{234} not DWARF5 */
+#define DW_AT_macro_info           0x43 /* DWARF{234} not DWARF5 */
 #define DW_AT_namelist_item                     0x44
 #define DW_AT_priority                          0x45
 #define DW_AT_segment                           0x46
@@ -338,7 +361,7 @@ extern "C" {
 #define DW_AT_associated                        0x4f /* DWARF3 */
 #define DW_AT_data_location                     0x50 /* DWARF3 */
 #define DW_AT_byte_stride                       0x51 /* DWARF3f */
-#define DW_AT_stride                            0x51 /* DWARF3 (do not use) */
+#define DW_AT_stride               0x51 /* DWARF3 (do not use) */
 #define DW_AT_entry_pc                          0x52 /* DWARF3 */
 #define DW_AT_use_UTF8                          0x53 /* DWARF3 */
 #define DW_AT_extension                         0x54 /* DWARF3 */
@@ -373,10 +396,10 @@ extern "C" {
 #define DW_AT_rank                              0x71 /* DWARF5 */
 #define DW_AT_str_offsets_base                  0x72 /* DWARF5 */
 #define DW_AT_addr_base                         0x73 /* DWARF5 */
-  /* Use DW_AT_rnglists_base, DW_AT_ranges_base is obsolete as */
-  /* it was only used in some DWARF5 drafts, not the final DWARF5. */
+/* Use DW_AT_rnglists_base, DW_AT_ranges_base is obsolete as */
+/* it was only used in some DWARF5 drafts, not the final DWARF5. */
 #define DW_AT_rnglists_base                     0x74 /* DWARF5 */
-  /*  DW_AT_dwo_id, an experiment in some DWARF4+. Not DWARF5! */
+/*  DW_AT_dwo_id, an experiment in some DWARF4+. Not DWARF5! */
 #define DW_AT_dwo_id                            0x75 /* DWARF4!*/
 #define DW_AT_dwo_name                          0x76 /* DWARF5 */
 #define DW_AT_reference                         0x77 /* DWARF5 */
@@ -402,13 +425,19 @@ extern "C" {
 #define DW_AT_defaulted                         0x8b /* DWARF5 */
 #define DW_AT_loclists_base                     0x8c /* DWARF5 */
 
-/* In extensions, we attempt to include the vendor extension
-   in the name even when the vendor leaves it out. */
+/* GreenHills, ghs.com GHS C */
+#define DW_AT_ghs_namespace_alias   0x806
+#define DW_AT_ghs_using_namespace   0x807
+#define DW_AT_ghs_using_declaration 0x808
+
+/*  In extensions, we attempt to include the vendor extension
+    in the name even when the vendor leaves it out. */
 
 /* HP extensions. */
 #define DW_AT_HP_block_index                    0x2000  /* HP */
 
-/* Follows extension so dwarfdump prints the most-likely-useful name. */
+/*  0x2000 Follows extension so dwarfdump prints the
+    most-likely-useful name. */
 #define DW_AT_lo_user                           0x2000
 
 #define DW_AT_MIPS_fde                          0x2001 /* MIPS/SGI */
@@ -417,7 +446,7 @@ extern "C" {
 #define DW_AT_MIPS_epilog_begin                 0x2004 /* MIPS/SGI */
 #define DW_AT_MIPS_loop_unroll_factor           0x2005 /* MIPS/SGI */
 #define DW_AT_MIPS_software_pipeline_depth      0x2006 /* MIPS/SGI */
-#define DW_AT_MIPS_linkage_name                 0x2007 /* MIPS/SGI, GNU, and others.*/
+#define DW_AT_MIPS_linkage_name 0x2007 /* MIPS/SGI,GNU,and others.*/
 #define DW_AT_MIPS_stride                       0x2008 /* MIPS/SGI */
 #define DW_AT_MIPS_abstract_name                0x2009 /* MIPS/SGI */
 #define DW_AT_MIPS_clone_origin                 0x200a /* MIPS/SGI */
@@ -430,9 +459,11 @@ extern "C" {
 #define DW_AT_MIPS_assumed_size                 0x2011 /* MIPS/SGI */
 
 /* HP extensions. */
-#define DW_AT_HP_unmodifiable                   0x2001 /* conflict: MIPS */
-#define DW_AT_HP_actuals_stmt_list              0x2010 /* conflict: MIPS */
-#define DW_AT_HP_proc_per_section               0x2011 /* conflict: MIPS */
+#define DW_AT_HP_unmodifiable      0x2001 /* conflict: MIPS */
+#define DW_AT_HP_prologue          0x2005 /* conflict: MIPS */
+#define DW_AT_HP_epilogue          0x2008 /* conflict: MIPS */
+#define DW_AT_HP_actuals_stmt_list 0x2010 /* conflict: MIPS */
+#define DW_AT_HP_proc_per_section  0x2011 /* conflict: MIPS */
 #define DW_AT_HP_raw_data_ptr                   0x2012 /* HP */
 #define DW_AT_HP_pass_by_reference              0x2013 /* HP */
 #define DW_AT_HP_opt_level                      0x2014 /* HP */
@@ -443,6 +474,12 @@ extern "C" {
 #define DW_AT_HP_all_variables_modifiable       0x2019 /* HP */
 #define DW_AT_HP_linkage_name                   0x201a /* HP */
 #define DW_AT_HP_prof_flags                     0x201b /* HP */
+#define DW_AT_HP_unit_name                      0x201f
+#define DW_AT_HP_unit_size                      0x2020
+#define DW_AT_HP_widened_byte_size              0x2021
+#define DW_AT_HP_definition_points              0x2022
+#define DW_AT_HP_default_location               0x2023
+#define DW_AT_HP_is_result_param                0x2029
 
 #define DW_AT_CPQ_discontig_ranges              0x2001 /* COMPAQ/HP */
 #define DW_AT_CPQ_semantic_events               0x2002 /* COMPAQ/HP */
@@ -450,7 +487,16 @@ extern "C" {
 #define DW_AT_CPQ_split_lifetimes_rtn           0x2004 /* COMPAQ/HP */
 #define DW_AT_CPQ_prologue_length               0x2005 /* COMPAQ/HP */
 
-#define DW_AT_INTEL_other_endian                0x2026 /* Intel, 1 if byte swapped. */
+/*  From GHS C GreenHills ghs.com */
+#define DW_AT_ghs_mangled    0x2007  /* conflict MIPS */
+#define DW_AT_ghs_rsm                           0x2083
+#define DW_AT_ghs_frsm                          0x2085
+#define DW_AT_ghs_frames                        0x2086
+#define DW_AT_ghs_rso                           0x2087
+#define DW_AT_ghs_subcpu                        0x2092
+#define DW_AT_ghs_lbrace_line                   0x2093
+
+#define DW_AT_INTEL_other_endian 0x2026 /* Intel, 1 if byte swapped.*/
 
 /* GNU extensions. */
 #define DW_AT_sf_names                          0x2101 /* GNU */
@@ -461,7 +507,8 @@ extern "C" {
 #define DW_AT_body_end                          0x2106 /* GNU */
 #define DW_AT_GNU_vector                        0x2107 /* GNU */
 
-/*  Thread safety, see http://gcc.gnu.org/wiki/ThreadSafetyAnnotation .  */
+/*  Thread safety, see
+    http://gcc.gnu.org/wiki/ThreadSafetyAnnotation .  */
 /*  The values here are from gcc-4.6.2 include/dwarf2.h.  The
     values are not given on the web page at all, nor on web pages
     it refers to. */
@@ -481,7 +528,8 @@ extern "C" {
     not consistent with the web page as of December 2011. */
 #define DW_AT_GNU_template_name                 0x2110 /* GNU */
 /*  The GNU call site extension.
-    See http://www.dwarfstd.org/ShowIssue.php?issue=100909.2&type=open .  */
+    See http://www.dwarfstd.org/ShowIssue.php?\
+    issue=100909.2&type=open .  */
 #define DW_AT_GNU_call_site_value               0x2111 /* GNU */
 #define DW_AT_GNU_call_site_data_value          0x2112 /* GNU */
 #define DW_AT_GNU_call_site_target              0x2113 /* GNU */
@@ -492,7 +540,9 @@ extern "C" {
 #define DW_AT_GNU_all_source_call_sites         0x2118 /* GNU */
 /*  Section offset to .debug_macro section. */
 #define DW_AT_GNU_macros                        0x2119 /* GNU */
-/* The GNU DebugFission project: http://gcc.gnu.org/wiki/DebugFission */
+#define DW_AT_GNU_deleted                       0x211a /* GNU */
+/*  The GNU DebugFission project:
+    http://gcc.gnu.org/wiki/DebugFission */
 #define DW_AT_GNU_dwo_name                      0x2130 /* GNU */
 #define DW_AT_GNU_dwo_id                        0x2131 /* GNU */
 
@@ -503,15 +553,11 @@ extern "C" {
 
 /* To distinguish distinct basic blocks in a single source line. */
 #define DW_AT_GNU_discriminator                 0x2136 /* GNU */
-/*  Ada GNAT gcc attributes. constant integer forms. */
-#define DW_AT_GNU_numerator                     0x2303 /* GNU */
-#define DW_AT_GNU_denominator                   0x2304 /* GNU */
-#define DW_AT_GNU_bias                          0x2305 /* GNU */
+#define DW_AT_GNU_locviews                      0x2137 /* GNU */
+#define DW_AT_GNU_entry_view                    0x2138 /* GNU */
 
-
-
-/* ALTIUM extension: ALTIUM Compliant location lists (flag) */
-#define DW_AT_ALTIUM_loclist    0x2300          /* ALTIUM  */
+/* See https://gcc.gnu.org/wiki/DW_AT_GNU_bias */
+#define DW_AT_GNU_bias          0x2305
 
 /* Sun extensions */
 #define DW_AT_SUN_template                      0x2201 /* SUN */
@@ -562,34 +608,94 @@ extern "C" {
 #define DW_AT_SUN_fortran_main_alias            0x223a /* SUN */
 #define DW_AT_SUN_fortran_based                 0x223b /* SUN */
 
+/* ALTIUM extension: ALTIUM Compliant location lists (flag) */
+#define DW_AT_ALTIUM_loclist    0x2300          /* ALTIUM  */
+/*  Ada GNAT gcc attributes. constant integer forms. */
 /*   See http://gcc.gnu.org/wiki/DW_AT_GNAT_descriptive_type .  */
-#define DW_AT_use_GNAT_descriptive_type         0x2301 /* GNAT */
-#define DW_AT_GNAT_descriptive_type             0x2302 /* GNAT */
+#define DW_AT_use_GNAT_descriptive_type         0x2301
+#define DW_AT_GNAT_descriptive_type             0x2302
+#define DW_AT_GNU_numerator                     0x2303 /* GNU */
+#define DW_AT_GNU_denominator                   0x2304 /* GNU */
+/* See https://gcc.gnu.org/wiki/DW_AT_GNU_bias */
+#define DW_AT_GNU_bias                          0x2305 /* GNU */
 
-/* UPC extension */
+/*  Go-specific type attributes
+    Naming as lower-case go instead of GO is a small mistake
+    by the Go language folks, it seems. This is the
+    common spelling for these. */
+#define DW_AT_go_kind                           0x2900
+#define DW_AT_go_key                            0x2901
+#define DW_AT_go_elem                           0x2902
+
+/*  Attribute for DW_TAG_member of a struct type.
+    Nonzero value indicates the struct field is an embedded field.*/
+#define DW_AT_go_embedded_field                 0x2903
+
+#define DW_AT_go_runtime_type                   0x2904
+
+/* UPC extension. */
 #define DW_AT_upc_threads_scaled                0x3210 /* UPC */
 
-/* PGI (STMicroelectronics) extensions. */
-#define DW_AT_PGI_lbase                         0x3a00 /* PGI. Block, constant, reference. This attribute is an ASTPLAB extension used to describe the array local base.  */
-#define DW_AT_PGI_soffset                       0x3a01  /* PGI. Block, constant, reference. ASTPLAB adds this attribute to describe the section offset, or the offset to the first element in the dimension. */
-#define DW_AT_PGI_lstride                       0x3a02  /* PGI. Block, constant, reference. ASTPLAB adds this attribute to describe the linear stride or the distance between elements in the dimension. */
+#define DW_AT_IBM_wsa_addr                      0x393e
+#define DW_AT_IBM_home_location                 0x393f
+#define DW_AT_IBM_alt_srcview                   0x3940
 
-/* There are two groups of Apple extensions here, it is
-   unclear what exactly is correct.  */
-#define DW_AT_APPLE_optimized                   0x3fe1 /* Apple */
-#define DW_AT_APPLE_flags                       0x3fe2 /* Apple */
-#define DW_AT_APPLE_isa                         0x3fe3 /* Apple */
-#define DW_AT_APPLE_block                       0x3fe4 /* Apple */
-#define DW_AT_APPLE_major_runtime_vers          0x3fe5 /* Apple */
-#define DW_AT_APPLE_runtime_class               0x3fe6 /* Apple */
-#define DW_AT_APPLE_omit_frame_ptr              0x3fe7 /* Apple */
+/*  PGI (STMicroelectronics) extensions. */
+/*  PGI. Block, constant, reference. This attribute is an ASTPLAB
+    extension used to describe the array local base.  */
+#define DW_AT_PGI_lbase                         0x3a00
 
-/* Apple Extensions for closures  */
-#define DW_AT_APPLE_closure                     0x3fe4 /* Apple */
-/* Apple Extensions for Objective-C runtime info */
-#define DW_AT_APPLE_major_runtime_vers          0x3fe5 /* Apple */
-#define DW_AT_APPLE_runtime_class               0x3fe6 /* Apple */
+/*  PGI. Block, constant, reference. ASTPLAB adds this attribute
+    to describe the section offset, or the offset to the
+    first element in the dimension. */
+#define DW_AT_PGI_soffset                       0x3a01
 
+/*  PGI. Block, constant, reference.  ASTPLAB adds this
+    attribute to describe the linear stride or the distance
+    between elements in the dimension. */
+#define DW_AT_PGI_lstride                       0x3a02
+
+#define DW_AT_BORLAND_property_read             0x3b11
+#define DW_AT_BORLAND_property_write            0x3b12
+#define DW_AT_BORLAND_property_implements       0x3b13
+#define DW_AT_BORLAND_property_index            0x3b14
+#define DW_AT_BORLAND_property_default          0x3b15
+#define DW_AT_BORLAND_Delphi_unit               0x3b20
+#define DW_AT_BORLAND_Delphi_class              0x3b21
+#define DW_AT_BORLAND_Delphi_record             0x3b22
+#define DW_AT_BORLAND_Delphi_metaclass          0x3b23
+#define DW_AT_BORLAND_Delphi_constructor        0x3b24
+#define DW_AT_BORLAND_Delphi_destructor         0x3b25
+#define DW_AT_BORLAND_Delphi_anonymous_method   0x3b26
+#define DW_AT_BORLAND_Delphi_interface          0x3b27
+#define DW_AT_BORLAND_Delphi_ABI                0x3b28
+#define DW_AT_BORLAND_Delphi_frameptr           0x3b30
+#define DW_AT_BORLAND_closure                   0x3b31
+
+#define DW_AT_LLVM_include_path                 0x3e00
+#define DW_AT_LLVM_config_macros                 0x3e01
+#define DW_AT_LLVM_sysroot                 0x3e02
+#define DW_AT_LLVM_tag_offset                 0x3e03
+/*  LLVM intends to use 0x3e04 - 0x3e06 */
+#define DW_AT_LLVM_apinotes                     0x3e03
+
+#define DW_AT_APPLE_optimized                   0x3fe1
+#define DW_AT_APPLE_flags                       0x3fe2
+#define DW_AT_APPLE_isa                         0x3fe3
+/*  0x3fe4 Also known as DW_AT_APPLE_closure, block preferred. */
+#define DW_AT_APPLE_block                       0x3fe4
+/* The rest of APPLE here are in support of Objective C */
+#define DW_AT_APPLE_major_runtime_vers          0x3fe5
+#define DW_AT_APPLE_runtime_class               0x3fe6
+#define DW_AT_APPLE_omit_frame_ptr              0x3fe7
+#define DW_AT_APPLE_property_name               0x3fe8
+#define DW_AT_APPLE_property_getter             0x3fe9
+#define DW_AT_APPLE_property_setter             0x3fea
+#define DW_AT_APPLE_property_attribute          0x3feb
+#define DW_AT_APPLE_objc_complete_type          0x3fec
+#define DW_AT_APPLE_property                    0x3fed
+#define DW_AT_APPLE_objc_direct                 0x3fee
+#define DW_AT_APPLE_sdk                         0x3fef
 
 #define DW_AT_hi_user                           0x3fff
 
@@ -759,13 +865,13 @@ extern "C" {
 #define DW_OP_convert                   0xa8 /* DWARF5 */
 #define DW_OP_reinterpret               0xa9 /* DWARF5 */
 
-
-    /* GNU extensions. */
 #define DW_OP_GNU_push_tls_address      0xe0 /* GNU */
+#define DW_OP_WASM_location             0xed
+#define DW_OP_WASM_location_int         0xee
 
-/* Follows extension so dwarfdump prints the most-likely-useful name. */
+/* Follows extension so dwarfdump prints the
+most-likely-useful name. */
 #define DW_OP_lo_user                   0xe0
-
 
 #define DW_OP_GNU_uninit                0xf0 /* GNU */
 #define DW_OP_GNU_encoded_addr          0xf1 /* GNU */
@@ -777,8 +883,9 @@ extern "C" {
 #define DW_OP_GNU_convert               0xf7 /* GNU */
 #define DW_OP_GNU_reinterpret           0xf9 /* GNU */
 #define DW_OP_GNU_parameter_ref         0xfa /* GNU */
-#define DW_OP_GNU_addr_index            0xfb /* GNU DebugFission */
-#define DW_OP_GNU_const_index           0xfc /* GNU DebugFission */
+#define DW_OP_GNU_addr_index            0xfb /* GNU Fission */
+#define DW_OP_GNU_const_index           0xfc /* GNU Fission */
+#define DW_OP_GNU_variable_value        0xfd /* GNU 2017 */
 
     /* HP extensions. */
 #define DW_OP_HP_unknown                0xe0 /* HP conflict: GNU */
@@ -789,46 +896,46 @@ extern "C" {
 #define DW_OP_HP_unmod_range            0xe5 /* HP */
 #define DW_OP_HP_tls                    0xe6 /* HP */
 
-#define DW_OP_INTEL_bit_piece           0xe8 /* Intel: made obsolete by DW_OP_bit_piece above. */
+/* Intel: made obsolete by DW_OP_bit_piece above. */
+#define DW_OP_INTEL_bit_piece           0xe8
 
-   /* Apple extension. */
+/* Apple extension. */
 #define DW_OP_APPLE_uninit              0xf0 /* Apple */
-#define DW_OP_PGI_omp_thread_num        0xf8 /* PGI (STMicroelectronics) */
+#define DW_OP_PGI_omp_thread_num   0xf8 /* PGI (STMicroelectronics) */
 
 #define DW_OP_hi_user                   0xff
 
-#define DW_ATE_address                  0x01
-#define DW_ATE_boolean                  0x02
-#define DW_ATE_complex_float            0x03
-#define DW_ATE_float                    0x04
-#define DW_ATE_signed                   0x05
-#define DW_ATE_signed_char              0x06
-#define DW_ATE_unsigned                 0x07
-#define DW_ATE_unsigned_char            0x08
-#define DW_ATE_imaginary_float          0x09  /* DWARF3 */
-#define DW_ATE_packed_decimal           0x0a  /* DWARF3f */
-#define DW_ATE_numeric_string           0x0b  /* DWARF3f */
-#define DW_ATE_edited                   0x0c  /* DWARF3f */
-#define DW_ATE_signed_fixed             0x0d  /* DWARF3f */
-#define DW_ATE_unsigned_fixed           0x0e  /* DWARF3f */
-#define DW_ATE_decimal_float            0x0f  /* DWARF3f */
-#define DW_ATE_UTF                      0x10  /* DWARF4 */
-#define DW_ATE_UCS                      0x11  /* DWARF5 */
-#define DW_ATE_ASCII                    0x12  /* DWARF5 */
-
+#define DW_ATE_address                0x01
+#define DW_ATE_boolean                0x02
+#define DW_ATE_complex_float          0x03
+#define DW_ATE_float                  0x04
+#define DW_ATE_signed                 0x05
+#define DW_ATE_signed_char            0x06
+#define DW_ATE_unsigned               0x07
+#define DW_ATE_unsigned_char          0x08
+#define DW_ATE_imaginary_float        0x09  /* DWARF3 */
+#define DW_ATE_packed_decimal         0x0a  /* DWARF3f */
+#define DW_ATE_numeric_string         0x0b  /* DWARF3f */
+#define DW_ATE_edited                 0x0c  /* DWARF3f */
+#define DW_ATE_signed_fixed           0x0d  /* DWARF3f */
+#define DW_ATE_unsigned_fixed         0x0e  /* DWARF3f */
+#define DW_ATE_decimal_float          0x0f  /* DWARF3f */
+#define DW_ATE_UTF                    0x10  /* DWARF4 */
+#define DW_ATE_UCS                    0x11  /* DWARF5 */
+#define DW_ATE_ASCII                  0x12  /* DWARF5 */
 
 /* ALTIUM extensions. x80, x81 */
 #define DW_ATE_ALTIUM_fract           0x80 /* ALTIUM __fract type */
 
-/* Follows extension so dwarfdump prints the most-likely-useful name. */
-#define DW_ATE_lo_user                  0x80
+/*  Follows extension so dwarfdump prints
+    the most-likely-useful name. */
+#define DW_ATE_lo_user                0x80
 
 /* Shown here to help dwarfdump build script. */
 #define DW_ATE_ALTIUM_accum           0x81 /* ALTIUM __accum type */
 
 /* HP Floating point extensions. */
 #define DW_ATE_HP_float80             0x80 /* (80 bit). HP */
-
 
 #define DW_ATE_HP_complex_float80     0x81 /* Complex (80 bit). HP  */
 #define DW_ATE_HP_float128            0x82 /* (128 bit). HP */
@@ -838,68 +945,83 @@ extern "C" {
 #define DW_ATE_HP_imaginary_float128  0x86 /* HP */
 
 /* Sun extensions */
-#define DW_ATE_SUN_interval_float       0x91
-#define DW_ATE_SUN_imaginary_float      0x92 /* Obsolete: See DW_ATE_imaginary_float */
+#define DW_ATE_SUN_interval_float     0x91
 
-#define DW_ATE_hi_user                  0xff
+/* Obsolete: See DW_ATE_imaginary_float */
+#define DW_ATE_SUN_imaginary_float    0x92
 
+#define DW_ATE_hi_user                0xff
 
 /*   DWARF5  Defaulted Member Encodings. */
-#define DW_DEFAULTED_no                 0x0      /* DWARF5 */
-#define DW_DEFAULTED_in_class           0x1      /* DWARF5 */
-#define DW_DEFAULTED_out_of_class       0x2      /* DWARF5 */
+#define DW_DEFAULTED_no             0x0      /* DWARF5 */
+#define DW_DEFAULTED_in_class       0x1      /* DWARF5 */
+#define DW_DEFAULTED_out_of_class   0x2      /* DWARF5 */
 
+#define DW_IDX_compile_unit         0x1      /* DWARF5 */
+#define DW_IDX_type_unit            0x2      /* DWARF5 */
+#define DW_IDX_die_offset           0x3      /* DWARF5 */
+#define DW_IDX_parent               0x4      /* DWARF5 */
+#define DW_IDX_type_hash            0x5      /* DWARF5 */
+#define DW_IDX_lo_user              0x2000   /* DWARF5 */
+#define DW_IDX_hi_user              0x0fff   /* DWARF5 */
 
-#define DW_IDX_compile_unit             0x1      /* DWARF5 */
-#define DW_IDX_type_unit                0x2      /* DWARF5 */
-#define DW_IDX_die_offset               0x3      /* DWARF5 */
-#define DW_IDX_parent                   0x4      /* DWARF5 */
-#define DW_IDX_type_hash                0x5      /* DWARF5 */
-#define DW_IDX_lo_user                  0x2000   /* DWARF5 */
-#define DW_IDX_hi_user                  0x0fff   /* DWARF5 */
-
-/* These with not-quite-the-same-names were used in DWARF4
-   and never official and should not be used by anyone. */
-#define DW_LLEX_end_of_list_entry        0x0      /* DWARF4 experimental */
-#define DW_LLEX_base_address_selection_entry 0x01 /* DWARF4 experimental */
-#define DW_LLEX_start_end_entry          0x02     /* DWARF4 experimental */
-#define DW_LLEX_start_length_entry       0x03     /* DWARF4 experimental */
-#define DW_LLEX_offset_pair_entry        0x04     /* DWARF4 experimental */
+/*  These with not-quite-the-same-names were used in DWARF4
+    We call then DW_LLEX.
+    Never official and should not be used by anyone.*/
+#define DW_LLEX_end_of_list_entry            0x0
+#define DW_LLEX_base_address_selection_entry 0x01
+#define DW_LLEX_start_end_entry              0x02
+#define DW_LLEX_start_length_entry           0x03
+#define DW_LLEX_offset_pair_entry            0x04
 
 /* DWARF5 Location List Entries in Split Objects */
-#define DW_LLE_end_of_list              0x0      /* DWARF5 */
-#define DW_LLE_base_addressx            0x01     /* DWARF5 */
-#define DW_LLE_startx_endx              0x02     /* DWARF5 */
-#define DW_LLE_startx_length            0x03     /* DWARF5 */
-#define DW_LLE_offset_pair              0x04     /* DWARF5 */
-#define DW_LLE_default_location         0x05     /* DWARF5 */
-#define DW_LLE_base_address             0x06     /* DWARF5 */
-#define DW_LLE_start_end                0x07     /* DWARF5 */
-#define DW_LLE_start_length             0x08     /* DWARF5 */
+#define DW_LLE_end_of_list          0x0      /* DWARF5 */
+#define DW_LLE_base_addressx        0x01     /* DWARF5 */
+#define DW_LLE_startx_endx          0x02     /* DWARF5 */
+#define DW_LLE_startx_length        0x03     /* DWARF5 */
+#define DW_LLE_offset_pair          0x04     /* DWARF5 */
+#define DW_LLE_default_location     0x05     /* DWARF5 */
+#define DW_LLE_base_address         0x06     /* DWARF5 */
+#define DW_LLE_start_end            0x07     /* DWARF5 */
+#define DW_LLE_start_length         0x08     /* DWARF5 */
 
 /* DWARF5 Range List Entries */
-#define DW_RLE_end_of_list              0x00     /* DWARF5 */
-#define DW_RLE_base_addressx            0x01     /* DWARF5 */
-#define DW_RLE_startx_endx              0x02     /* DWARF5 */
-#define DW_RLE_startx_length            0x03     /* DWARF5 */
-#define DW_RLE_offset_pair              0x04     /* DWARF5 */
-#define DW_RLE_base_address             0x05     /* DWARF5 */
-#define DW_RLE_start_end                0x06     /* DWARF5 */
-#define DW_RLE_start_length             0x07     /* DWARF5 */
+#define DW_RLE_end_of_list          0x00     /* DWARF5 */
+#define DW_RLE_base_addressx        0x01     /* DWARF5 */
+#define DW_RLE_startx_endx          0x02     /* DWARF5 */
+#define DW_RLE_startx_length        0x03     /* DWARF5 */
+#define DW_RLE_offset_pair          0x04     /* DWARF5 */
+#define DW_RLE_base_address         0x05     /* DWARF5 */
+#define DW_RLE_start_end            0x06     /* DWARF5 */
+#define DW_RLE_start_length         0x07     /* DWARF5 */
+
+/*  GNUIndex encodings non-standard. New in 2020,
+    used in .debug_gnu_pubnames .debug_gnu_pubtypes
+    but no spellings provided in documentation. */
+#define DW_GNUIVIS_global   0
+#define DW_GNUIVIS_static   1
+
+/*  GNUIndex encodings non-standard. New in 2020,
+    used in .debug_gnu_pubnames .debug_gnu_pubtypes
+    but no spellings provided in documentation. */
+#define DW_GNUIKIND_none     0
+#define DW_GNUIKIND_type     1
+#define DW_GNUIKIND_variable 2
+#define DW_GNUIKIND_function 3
+#define DW_GNUIKIND_other    4
 
 /* DWARF5 Unit header unit type encodings */
-#define DW_UT_compile                   0x01  /* DWARF5 */
-#define DW_UT_type                      0x02  /* DWARF5 */
-#define DW_UT_partial                   0x03  /* DWARF5 */
-#define DW_UT_skeleton                  0x04  /* DWARF5 */
-#define DW_UT_split_compile             0x05  /* DWARF5 */
-#define DW_UT_split_type                0x06  /* DWARF5 */
-#define DW_UT_lo_user                   0x80  /* DWARF5 */
-#define DW_UT_hi_user                   0xff  /* DWARF5 */
-
+#define DW_UT_compile               0x01  /* DWARF5 */
+#define DW_UT_type                  0x02  /* DWARF5 */
+#define DW_UT_partial               0x03  /* DWARF5 */
+#define DW_UT_skeleton              0x04  /* DWARF5 */
+#define DW_UT_split_compile         0x05  /* DWARF5 */
+#define DW_UT_split_type            0x06  /* DWARF5 */
+#define DW_UT_lo_user               0x80  /* DWARF5 */
+#define DW_UT_hi_user               0xff  /* DWARF5 */
 
 /*  DWARF5 DebugFission object section id values
-    for  .dwp object section offsets hash table.
+    for .dwp object section offsets hash table.
     0 is reserved, not used.
     2 is actually reserved, not used in DWARF5.
     But 2 may be seen in some DWARF4 objects.
@@ -912,7 +1034,6 @@ extern "C" {
 #define DW_SECT_STR_OFFSETS 6  /* .debug_str_offsets.dwo DWARF5 */
 #define DW_SECT_MACRO       7  /* .debug_macro.dwo       DWARF5 */
 #define DW_SECT_RNGLISTS    8  /* .debug_rnglists.dwo    DWARF5 */
-
 
 /* Decimal Sign codes. */
 #define DW_DS_unsigned                  0x01 /* DWARF3f */
@@ -978,10 +1099,10 @@ extern "C" {
 #define DW_LANG_UPC                     0x0012 /* DWARF3f */
 #define DW_LANG_D                       0x0013 /* DWARF3f */
 #define DW_LANG_Python                  0x0014 /* DWARF4 */
-/* The following 2 are not yet formally approved October 2010, but
-   it seems extremely likely they will be approved as the committee
-   chair agrees these should be ok and no one on the committee
-   has objected. */
+/*  The following 2 are not yet formally approved October 2010, but
+    it seems extremely likely they will be approved as the committee
+    chair agrees these should be ok and no one on the committee
+    has objected. */
 #define DW_LANG_OpenCL                  0x0015 /* DWARF5 */
 #define DW_LANG_Go                      0x0016 /* DWARF5 */
 #define DW_LANG_Modula3                 0x0017 /* DWARF5 */
@@ -1028,10 +1149,9 @@ extern "C" {
 #define DW_CC_GNU_renesas_sh            0x40 /* GNU */
 #define DW_CC_GNU_borland_fastcall_i386 0x41 /* GNU */
 
-
-
 /* ALTIUM extensions. */
-/* Function is an interrupt handler, return address on system stack. */
+/*  Function is an interrupt handler,
+    return address on system stack. */
 #define DW_CC_ALTIUM_interrupt          0x65  /* ALTIUM*/
 
 /* Near function model, return address on system stack. */
@@ -1041,8 +1161,29 @@ extern "C" {
 #define DW_CC_ALTIUM_near_user_stack    0x67  /* ALTIUM */
 
 /* Huge function model, return address on user stack.  */
-#define DW_CC_ALTIUM_huge_user_stack    0x68  /* ALTIUM */
+#define DW_CC_ALTIUM_huge_user_stack  0x68  /* ALTIUM */
 
+#define DW_CC_GNU_BORLAND_safecall    0xb0
+#define DW_CC_GNU_BORLAND_stdcall     0xb1
+#define DW_CC_GNU_BORLAND_pascal      0xb2
+#define DW_CC_GNU_BORLAND_msfastcall  0xb3
+#define DW_CC_GNU_BORLAND_msreturn    0xb4
+#define DW_CC_GNU_BORLAND_thiscall    0xb5
+#define DW_CC_GNU_BORLAND_fastcall    0xb6
+
+#define DW_CC_LLVM_vectorcall         0xc0
+#define DW_CC_LLVM_Win64              0xc1
+#define DW_CC_LLVM_X86_64SysV         0xc2
+#define DW_CC_LLVM_AAPCS              0xc3
+#define DW_CC_LLVM_AAPCS_VFP          0xc4
+#define DW_CC_LLVM_IntelOclBicc       0xc5
+#define DW_CC_LLVM_SpirFunction       0xc6
+#define DW_CC_LLVM_OpenCLKernel       0xc7
+#define DW_CC_LLVM_Swift              0xc8
+#define DW_CC_LLVM_PreserveMost       0xc9
+#define DW_CC_LLVM_PreserveAll        0xca
+#define DW_CC_LLVM_X86RegCall         0xcb
+#define DW_CC_GDB_IBM_OpenCL          0xff
 
 #define DW_CC_hi_user                   0xff
 
@@ -1071,6 +1212,7 @@ extern "C" {
 #define DW_LNCT_GNU_decl_file           0x7
 #define DW_LNCT_GNU_decl_line           0x8
 #define DW_LNCT_lo_user                 0x2000 /* DWARF5 */
+#define DW_LNCT_LLVM_source             0x2001
 #define DW_LNCT_hi_user                 0x3fff /* DWARF5 */
 
 /* Line number standard opcode name. */
@@ -1103,7 +1245,7 @@ extern "C" {
 /* Line number extended opcode name. */
 #define DW_LNE_end_sequence             0x01
 #define DW_LNE_set_address              0x02
-#define DW_LNE_define_file              0x03  /* DWARF4 and earlier only */
+#define DW_LNE_define_file        0x03  /* DWARF4 and earlier only */
 #define DW_LNE_set_discriminator        0x04  /* DWARF4 */
 
 /* HP extensions. */
@@ -1129,7 +1271,6 @@ extern "C" {
 #define DW_ISA_ARM_thumb 1 /* ARM ISA */
 #define DW_ISA_ARM_arm   2 /* ARM ISA */
 
-
 /* Macro information, DWARF5 */
 #define DW_MACRO_define                  0x01 /* DWARF5 */
 #define DW_MACRO_undef                   0x02 /* DWARF5 */
@@ -1153,15 +1294,14 @@ extern "C" {
 #define DW_MACINFO_end_file             0x04
 #define DW_MACINFO_vendor_ext           0xff
 
-/* CFA operator compaction (a space saving measure, see
-   the DWARF standard) means DW_CFA_extended and DW_CFA_nop
-   have the same value here.  */
+/*  CFA operator compaction (a space saving measure, see
+    the DWARF standard) means DW_CFA_extended and DW_CFA_nop
+    have the same value here.  */
 #define DW_CFA_advance_loc        0x40
 #define DW_CFA_offset             0x80
 #define DW_CFA_restore            0xc0
-#define DW_CFA_extended           0
-
 #define DW_CFA_nop              0x00
+#define DW_CFA_extended            0
 #define DW_CFA_set_loc          0x01
 #define DW_CFA_advance_loc1     0x02
 #define DW_CFA_advance_loc2     0x03
@@ -1176,35 +1316,37 @@ extern "C" {
 #define DW_CFA_def_cfa          0x0c
 #define DW_CFA_def_cfa_register 0x0d
 #define DW_CFA_def_cfa_offset   0x0e
-#define DW_CFA_def_cfa_expression 0x0f     /* DWARF3 */
-#define DW_CFA_expression       0x10       /* DWARF3 */
-#define DW_CFA_offset_extended_sf 0x11     /* DWARF3 */
-#define DW_CFA_def_cfa_sf       0x12       /* DWARF3 */
-#define DW_CFA_def_cfa_offset_sf 0x13      /* DWARF3 */
-#define DW_CFA_val_offset        0x14      /* DWARF3f */
-#define DW_CFA_val_offset_sf     0x15      /* DWARF3f */
-#define DW_CFA_val_expression    0x16      /* DWARF3f */
-#define DW_CFA_lo_user           0x1c
-#define DW_CFA_low_user          0x1c  /* Incorrect spelling, do not use. */
+#define DW_CFA_def_cfa_expression 0x0f /* DWARF3 */
+#define DW_CFA_expression         0x10 /* DWARF3 */
+#define DW_CFA_offset_extended_sf 0x11 /* DWARF3 */
+#define DW_CFA_def_cfa_sf         0x12 /* DWARF3 */
+#define DW_CFA_def_cfa_offset_sf  0x13 /* DWARF3 */
+#define DW_CFA_val_offset         0x14 /* DWARF3f */
+#define DW_CFA_val_offset_sf      0x15 /* DWARF3f */
+#define DW_CFA_val_expression     0x16 /* DWARF3f */
+#define DW_CFA_lo_user     0x1c
+#define DW_CFA_low_user    0x1c  /* Incorrect spelling, do not use. */
 
 /* SGI/MIPS extension. */
 #define DW_CFA_MIPS_advance_loc8 0x1d   /* MIPS */
 
 /* GNU extensions. */
-#define DW_CFA_GNU_window_save   0x2d  /* GNU */
-#define DW_CFA_GNU_args_size     0x2e /* GNU  */
+#define DW_CFA_GNU_window_save               0x2d /* GNU */
+#define DW_CFA_AARCH64_negate_ra_state       0x2d
+#define DW_CFA_GNU_args_size                 0x2e /* GNU */
 #define DW_CFA_GNU_negative_offset_extended  0x2f /* GNU */
 
-/* Metaware if HC is augmentation, apparently meaning High C
-   and the op has a single uleb operand.
-   See http://sourceforge.net/p/elftoolchain/tickets/397/  */
+/*  Metaware if HC is augmentation, apparently meaning High C
+    and the op has a single uleb operand.
+    See http://sourceforge.net/p/elftoolchain/tickets/397/  */
 #define DW_CFA_METAWARE_info     0x34
 
 #define DW_CFA_high_user         0x3f
 
 /* GNU exception header encoding.  See the Generic
    Elf Specification of the Linux Standard Base (LSB).
-   http://refspecs.freestandards.org/LSB_3.0.0/LSB-Core-generic/LSB-Core-generic/dwarfext.html
+   http://refspecs.freestandards.org/LSB_3.0.0/\
+   LSB-Core-generic/LSB-Core-generic/dwarfext.html
    The upper 4 bits indicate how the value is to be applied.
    The lower 4 bits indicate the format of the data.
    These identifiers are not defined by any DWARFn standard.
@@ -1227,7 +1369,6 @@ extern "C" {
 
 #define DW_EH_PE_omit     0xff  /* GNU.  Means no value present. */
 
-
 /* Mapping from machine registers and pseudo-regs into the
    .debug_frame table.  DW_FRAME entries are machine specific.
    These describe MIPS/SGI R3000, R4K, R4400 and all later
@@ -1243,10 +1384,10 @@ extern "C" {
    frame definitions here (and the fixed table sizes
    they imply) obsolete.  They are left here for compatibility.
 */
-/* Default column used for CFA in the libdwarf reader client.
-   Assumes reg 0 never appears as
-   a register in DWARF information. Usable for MIPS,
-   but never a good idea, really.    */
+/*  Default column used for CFA in the libdwarf reader client.
+    Assumes reg 0 never appears as
+    a register in DWARF information. Usable for MIPS,
+    but never a good idea, really.    */
 /*  These identifiers are not defined by any DWARFn standard. */
 #define DW_FRAME_CFA_COL 0
 
@@ -1282,11 +1423,10 @@ extern "C" {
 #define DW_FRAME_REG30  30 /* integer reg 30 */
 #define DW_FRAME_REG31  31 /* integer reg 31, aka ra */
 
-        /* MIPS1, 2 have only some of these 64-bit registers.
-        ** MIPS1  save/restore takes 2 instructions per 64-bit reg, and
-        ** in that case, the register is considered stored after the second
-        ** swc1.
-        */
+    /* MIPS1,2 have only some of these 64-bit registers.
+    ** MIPS1  save/restore takes 2 instructions per 64-bit reg, and
+    ** in that case, the register is considered stored after
+    ** the second swc1.  */
 #define DW_FRAME_FREG0  32 /* 64-bit floating point reg 0 */
 #define DW_FRAME_FREG1  33 /* 64-bit floating point reg 1 */
 #define DW_FRAME_FREG2  34 /* 64-bit floating point reg 2 */
@@ -1387,43 +1527,37 @@ extern "C" {
 #ifndef DW_FRAME_HIGHEST_NORMAL_REGISTER
 #define DW_FRAME_HIGHEST_NORMAL_REGISTER 188
 #endif
-/* This is the number of columns in the Frame Table.
-   This constant should
-   be kept in sync with DW_REG_TABLE_SIZE defined in libdwarf.h
-   It must also be large enough to be beyond the highest
-   compiler-defined-register (meaning DW_FRAME_RA_COL DW_FRAME_STATIC_LINK
-   in the MIPS/IRIX case */
+/*  This is the number of columns in the Frame Table.
+    This constant should
+    be kept in sync with DW_REG_TABLE_SIZE defined in libdwarf.h
+    It must also be large enough to be beyond the highest
+    compiler-defined-register (meaning
+    DW_FRAME_RA_COL DW_FRAME_STATIC_LINK
+    in the MIPS/IRIX case */
 #ifndef DW_FRAME_LAST_REG_NUM
 #define DW_FRAME_LAST_REG_NUM   (DW_FRAME_HIGHEST_NORMAL_REGISTER + 3)
 #endif
 
-
-/* Column recording ra (return address from a function call).
-   This is common to many architectures, but as a 'simple register'
-   is not necessarily adequate for all architectures.
-   For MIPS/IRIX this register number is actually recorded on disk
-   in the .debug_frame section.
-   */
+/*  Column recording ra (return address from a function call).
+    This is common to many architectures, but as a 'simple register'
+    is not necessarily adequate for all architectures.
+    For MIPS/IRIX this register number is actually recorded on disk
+    in the .debug_frame section.  */
 #define DW_FRAME_RA_COL  (DW_FRAME_HIGHEST_NORMAL_REGISTER + 1)
 
-/* Column recording static link applicable to up-level
-   addressing, as in IRIX mp code, pascal, etc.
-   This is common to many architectures but
-   is not necessarily adequate for all architectures.
-   For MIPS/IRIX this register number is actually recorded on disk
-   in the .debug_frame section.
-*/
+/*  Column recording static link applicable to up-level
+    addressing, as in IRIX mp code, pascal, etc.
+    This is common to many architectures but
+    is not necessarily adequate for all architectures.
+    For MIPS/IRIX this register number is actually recorded on disk
+    in the .debug_frame section.  */
 #define DW_FRAME_STATIC_LINK (DW_FRAME_HIGHEST_NORMAL_REGISTER + 2)
-
-
 
 /*
   DW_FRAME_UNDEFINED_VAL and  DW_FRAME_SAME_VAL  are
   never on disk, just generated by libdwarf. See libdwarf.h
   for their values.
 */
-
-
 
 #define DW_CHILDREN_no               0x00
 #define DW_CHILDREN_yes              0x01

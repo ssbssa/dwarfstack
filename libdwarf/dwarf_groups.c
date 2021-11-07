@@ -1,37 +1,55 @@
 /*
   Copyright (C) 2017-2018 David Anderson. All Rights Reserved.
 
-  This program is free software; you can redistribute it and/or modify it
-  under the terms of version 2.1 of the GNU Lesser General Public License
-  as published by the Free Software Foundation.
+  This program is free software; you can redistribute it
+  and/or modify it under the terms of version 2.1 of the
+  GNU Lesser General Public License as published by the Free
+  Software Foundation.
 
-  This program is distributed in the hope that it would be useful, but
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  This program is distributed in the hope that it would be
+  useful, but WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+  PURPOSE.
 
-  Further, this software is distributed without any warranty that it is
-  free of the rightful claim of any third person regarding infringement
-  or the like.  Any license provided herein, whether implied or
-  otherwise, applies only to this software file.  Patent licenses, if
-  any, provided herein do not apply to combinations of this program with
-  other software, or any other product whatsoever.
+  Further, this software is distributed without any warranty
+  that it is free of the rightful claim of any third person
+  regarding infringement or the like.  Any license provided
+  herein, whether implied or otherwise, applies only to this
+  software file.  Patent licenses, if any, provided herein
+  do not apply to combinations of this program with other
+  software, or any other product whatsoever.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this program; if not, write the Free Software
-  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
-  USA.
+  You should have received a copy of the GNU Lesser General
+  Public License along with this program; if not, write the
+  Free Software Foundation, Inc., 51 Franklin Street - Fifth
+  Floor, Boston MA 02110-1301, USA.
 
 */
 
 #include "config.h"
 #include <stdio.h>
-#include "dwarf_incl.h"
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+#endif /* HAVE_STDLIB_H */
+#ifdef HAVE_STDINT_H
+#include <stdint.h> /* For uintptr_t */
+#endif /* HAVE_STDINT_H */
+#if defined(_WIN32) && defined(HAVE_STDAFX_H)
+#include "stdafx.h"
+#endif /* HAVE_STDAFX_H */
+#ifdef HAVE_STRING_H
+#include <string.h>  /* strcpy() strlen() */
+#endif
+#ifdef HAVE_STDDEF_H
+#include <stddef.h>
+#endif
+#include "libdwarf_private.h"
+#include "dwarf.h"
+#include "libdwarf.h"
+#include "dwarf_base_types.h"
+#include "dwarf_opaque.h"
 #include "dwarf_error.h"
 #include "dwarf_tsearch.h"
-#include <stdlib.h>
-
-#define TRUE  1
-#define FALSE 0
 
 #define HASHSEARCH
 
@@ -59,14 +77,13 @@ grp_make_entry(unsigned section, unsigned group,const char *name)
 {
     struct Dwarf_Group_Map_Entry_s *e = 0;
     e = calloc(1,sizeof(struct Dwarf_Group_Map_Entry_s));
-    if(e) {
+    if (e) {
         e->gm_key =    section;
         e->gm_group_number = group;
         e->gm_section_name = name;
     }
     return e;
 }
-
 
 static DW_TSHASHTYPE
 grp_data_hashfunc(const void *keyp)
@@ -93,14 +110,6 @@ grp_compare_function(const void *l, const void *r)
 
     /* match. */
     return 0;
-}
-
-static void
-_dwarf_grp_destroy_free_node(void*nodep)
-{
-    struct Dwarf_Group_Map_Entry_s * enp = nodep;
-    free(enp);
-    return;
 }
 
 int
@@ -177,9 +186,6 @@ _dwarf_section_get_target_group_from_map(Dwarf_Debug dbg,
     return DW_DLV_NO_ENTRY;
 }
 
-
-
-
 /*  New May 2017.  So users can find out what groups (dwo or COMDAT)
     are in the object and how much to allocate so one can get the
     group-section map data. */
@@ -199,14 +205,12 @@ int dwarf_sec_group_sizes(Dwarf_Debug dbg,
     return DW_DLV_OK;
 }
 
-
 static Dwarf_Unsigned map_reccount = 0;
 static struct temp_map_struc_s {
     Dwarf_Unsigned section;
     Dwarf_Unsigned group;
     const char *name;
 } *temp_map_data;
-
 
 static void
 grp_walk_map(const void *nodep,
@@ -265,7 +269,7 @@ int dwarf_sec_group_map(Dwarf_Debug dbg,
     Dwarf_Unsigned i = 0;
     struct Dwarf_Group_Data_s *grp = 0;
 
-    if(temp_map_data) {
+    if (temp_map_data) {
         _dwarf_error(dbg,error,DW_DLE_GROUP_INTERNAL_ERROR);
         return DW_DLV_ERROR;
     }
@@ -275,8 +279,9 @@ int dwarf_sec_group_map(Dwarf_Debug dbg,
         _dwarf_error(dbg,error,DW_DLE_GROUP_COUNT_ERROR);
         return DW_DLV_ERROR;
     }
-    temp_map_data = calloc(map_entry_count,sizeof(struct temp_map_struc_s));
-    if(!temp_map_data) {
+    temp_map_data = calloc(map_entry_count,
+        sizeof(struct temp_map_struc_s));
+    if (!temp_map_data) {
         _dwarf_error(dbg,error,DW_DLE_GROUP_MAP_ALLOC);
         return DW_DLV_ERROR;
     }
@@ -328,7 +333,7 @@ _dwarf_dwo_groupnumber_given_name(
     const char **s = 0;
 
     for (s = dwo_secnames; *s; s++) {
-        if(!strcmp(name,*s)) {
+        if (!strcmp(name,*s)) {
             *grpnum_out = DW_GROUPNUMBER_DWO;
             return DW_DLV_OK;
         }
@@ -352,12 +357,11 @@ grp_walk_for_name(const void *nodep,
         return;
     }
     if (re->gm_group_number == target_group) {
-        if(!strcmp(lookfor_name,re->gm_section_name)) {
+        if (!strcmp(lookfor_name,re->gm_section_name)) {
             found_name_in_group = TRUE;
         }
     }
 }
-
 
 /* returns TRUE or FALSE */
 int
@@ -375,9 +379,18 @@ _dwarf_section_in_group_by_name(Dwarf_Debug dbg,
     return found_name_in_group;
 }
 
+static void
+_dwarf_grp_destroy_free_node(void*nodep)
+{
+    struct Dwarf_Group_Map_Entry_s * enp = nodep;
+    free(enp);
+    return;
+}
+
 void
 _dwarf_destroy_group_map(Dwarf_Debug dbg)
 {
-    dwarf_tdestroy(dbg->de_groupnumbers.gd_map,_dwarf_grp_destroy_free_node);
+    dwarf_tdestroy(dbg->de_groupnumbers.gd_map,
+        _dwarf_grp_destroy_free_node);
     dbg->de_groupnumbers.gd_map = 0;
 }

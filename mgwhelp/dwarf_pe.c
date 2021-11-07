@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Jose Fonseca
- * Copyright (C) 2013-2019 Hannes Domani
+ * Copyright (C) 2013-2021 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,11 @@
 #include <windows.h>
 
 #include "config.h"
-#include "dwarf_incl.h"
+#include "libdwarf_private.h"
+#include "dwarf.h"
+#include "libdwarf.h"
+#include "dwarf_base_types.h"
+#include "dwarf_opaque.h"
 
 
 wchar_t *
@@ -70,40 +74,45 @@ typedef struct {
 static int
 pe_get_section_info(void *obj,
                     Dwarf_Half section_index,
-                    Dwarf_Obj_Access_Section *return_section,
+                    Dwarf_Obj_Access_Section_a *return_section,
                     UNUSEDARG int *error)
 {
     pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
 
-    return_section->addr = 0;
+    return_section->as_addr = 0;
     if (section_index == 0) {
         /* Non-elf object formats must honor elf convention that pSection index
          * is always empty. */
-        return_section->size = 0;
-        return_section->name = "";
+        return_section->as_size = 0;
+        return_section->as_name = "";
     } else {
         PIMAGE_SECTION_HEADER pSection = pe_obj->Sections + section_index - 1;
         if (pSection->Misc.VirtualSize < pSection->SizeOfRawData) {
-            return_section->size = pSection->Misc.VirtualSize;
+            return_section->as_size = pSection->Misc.VirtualSize;
         } else {
-            return_section->size = pSection->SizeOfRawData;
+            return_section->as_size = pSection->SizeOfRawData;
         }
-        return_section->name = (const char *)pSection->Name;
-        if (return_section->name[0] == '/') {
-            return_section->name = &pe_obj->pStringTable[atoi(&return_section->name[1])];
+        return_section->as_name = (const char *)pSection->Name;
+        if (return_section->as_name[0] == '/') {
+            return_section->as_name = &pe_obj->pStringTable[atoi(&return_section->as_name[1])];
         }
     }
-    return_section->link = 0;
-    return_section->entrysize = 0;
+    return_section->as_type = 0;
+    return_section->as_flags = 0;
+    return_section->as_offset = 0;
+    return_section->as_link = 0;
+    return_section->as_info = 0;
+    return_section->as_addralign = 0;
+    return_section->as_entrysize = 0;
 
     return DW_DLV_OK;
 }
 
 
-static Dwarf_Endianness
+static Dwarf_Small
 pe_get_byte_order(UNUSEDARG void *obj)
 {
-    return DW_OBJECT_LSB;
+    return DW_END_little;
 }
 
 
@@ -113,6 +122,17 @@ pe_get_pointer_size(void *obj)
     pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
     PIMAGE_FILE_HEADER pFileHeader = &pe_obj->pNtHeaders->FileHeader;
     return pFileHeader->Machine == IMAGE_FILE_MACHINE_I386 ? 4 : 8;
+}
+
+
+static Dwarf_Unsigned
+pe_get_filesize(void *obj)
+{
+    pe_access_object_t *pe_obj = (pe_access_object_t *)obj;
+    LARGE_INTEGER li;
+    if (!GetFileSizeEx(pe_obj->hFile, &li))
+        return 0;
+    return li.QuadPart;
 }
 
 
@@ -142,12 +162,13 @@ pe_load_section(void *obj,
 }
 
 
-static const Dwarf_Obj_Access_Methods
+static const Dwarf_Obj_Access_Methods_a
 pe_methods = {
     pe_get_section_info,
     pe_get_byte_order,
     pe_get_pointer_size,
     pe_get_pointer_size,
+    pe_get_filesize,
     pe_get_section_count,
     pe_load_section,
     NULL
@@ -165,7 +186,7 @@ dwarf_pe_init_link(const wchar_t *image,
 {
     int res = 0;
     pe_access_object_t *pe_obj = 0;
-    Dwarf_Obj_Access_Interface *intfc = 0;
+    Dwarf_Obj_Access_Interface_a *intfc = 0;
 
     /* Initialize the internal struct */
     pe_obj = (pe_access_object_t *)calloc(1, sizeof *pe_obj);
@@ -234,22 +255,22 @@ dwarf_pe_init_link(const wchar_t *image,
     }
 
     /* Initialize the interface struct */
-    intfc = (Dwarf_Obj_Access_Interface *)calloc(1, sizeof *intfc);
+    intfc = (Dwarf_Obj_Access_Interface_a *)calloc(1, sizeof *intfc);
     if (!intfc) {
         goto no_intfc;
     }
-    intfc->object = pe_obj;
-    intfc->methods = &pe_methods;
+    intfc->ai_object = pe_obj;
+    intfc->ai_methods = &pe_methods;
 
-    res = dwarf_object_init(intfc, errhand, errarg, ret_dbg, error);
+    res = dwarf_object_init_b(intfc, errhand, errarg, DW_GROUPNUMBER_ANY, ret_dbg, error);
     if (res != DW_DLV_OK) {
         Dwarf_Unsigned num_sections = pe_obj->pNtHeaders->FileHeader.NumberOfSections;
-        Dwarf_Obj_Access_Section section;
+        Dwarf_Obj_Access_Section_a section;
         char *link;
         if (link_path
                 && num_sections > 0
                 && pe_get_section_info(pe_obj, num_sections, &section, NULL) == DW_DLV_OK
-                && !strcmp(section.name, ".gnu_debuglink")
+                && !strcmp(section.as_name, ".gnu_debuglink")
                 && pe_load_section(pe_obj, num_sections, (Dwarf_Small **)&link, NULL) == DW_DLV_OK
                 && link && link[0]) {
             wcscpy(link_path, image);
@@ -316,11 +337,11 @@ int
 dwarf_pe_finish(Dwarf_Debug dbg,
                 Dwarf_Error *error)
 {
-    pe_access_object_t *pe_obj = (pe_access_object_t *)dbg->de_obj_file->object;
+    pe_access_object_t *pe_obj = (pe_access_object_t *)dbg->de_obj_file->ai_object;
     UnmapViewOfFile(pe_obj->lpFileBase);
     CloseHandle(pe_obj->hFileMapping);
     CloseHandle(pe_obj->hFile);
     free(pe_obj);
     free(dbg->de_obj_file);
-    return dwarf_object_finish(dbg, error);
+    return dwarf_object_finish(dbg);
 }

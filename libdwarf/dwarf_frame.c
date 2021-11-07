@@ -1,54 +1,92 @@
 /*
   Copyright (C) 2000-2006 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2007-2018 David Anderson. All Rights Reserved.
+  Portions Copyright (C) 2007-2021 David Anderson. All Rights Reserved.
   Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 
-  This program is free software; you can redistribute it and/or modify it
-  under the terms of version 2.1 of the GNU Lesser General Public License
-  as published by the Free Software Foundation.
+  This program is free software; you can redistribute it
+  and/or modify it under the terms of version 2.1 of the
+  GNU Lesser General Public License as published by the Free
+  Software Foundation.
 
-  This program is distributed in the hope that it would be useful, but
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  This program is distributed in the hope that it would be
+  useful, but WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+  PURPOSE.
 
-  Further, this software is distributed without any warranty that it is
-  free of the rightful claim of any third person regarding infringement
-  or the like.  Any license provided herein, whether implied or
-  otherwise, applies only to this software file.  Patent licenses, if
-  any, provided herein do not apply to combinations of this program with
-  other software, or any other product whatsoever.
+  Further, this software is distributed without any warranty
+  that it is free of the rightful claim of any third person
+  regarding infringement or the like.  Any license provided
+  herein, whether implied or otherwise, applies only to this
+  software file.  Patent licenses, if any, provided herein
+  do not apply to combinations of this program with other
+  software, or any other product whatsoever.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this program; if not, write the Free Software
-  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
-  USA.
+  You should have received a copy of the GNU Lesser General
+  Public License along with this program; if not, write the
+  Free Software Foundation, Inc., 51 Franklin Street - Fifth
+  Floor, Boston MA 02110-1301, USA.
 
 */
 
 #include "config.h"
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#include "dwarf_incl.h"
+#endif /* HAVE_STDLIB_H */
+#ifdef HAVE_STDINT_H
+#include <stdint.h> /* For uintptr_t */
+#endif /* HAVE_STDINT_H */
+#if defined(_WIN32) && defined(HAVE_STDAFX_H)
+#include "stdafx.h"
+#endif /* HAVE_STDAFX_H */
+#ifdef HAVE_STRING_H
+#include <string.h>  /* strcpy() strlen() */
+#endif
+#ifdef HAVE_STDDEF_H
+#include <stddef.h>
+#endif
+#include "libdwarf_private.h"
+#include "dwarf.h"
+#include "libdwarf.h"
+#include "dwarf_base_types.h"
+#include "dwarf_opaque.h"
 #include "dwarf_alloc.h"
 #include "dwarf_error.h"
 #include "dwarf_util.h"
 #include "dwarf_frame.h"
 #include "dwarf_arange.h" /* Using Arange as a way to build a list */
+#include "dwarf_string.h"
 
 #define FDE_NULL_CHECKS_AND_SET_DBG(fde,dbg )          \
     do {                                               \
         if ((fde) == NULL) {                           \
             _dwarf_error(NULL, error, DW_DLE_FDE_NULL);\
-        return (DW_DLV_ERROR);                         \
+        return DW_DLV_ERROR;                         \
     }                                                  \
     (dbg)= (fde)->fd_dbg;                              \
     if ((dbg) == NULL) {                               \
         _dwarf_error(NULL, error, DW_DLE_FDE_DBG_NULL);\
-        return (DW_DLV_ERROR);                         \
+        return DW_DLV_ERROR;                         \
     } } while (0)
 
-
 #define MIN(a,b)  (((a) < (b))? a:b)
+
+#if 0 /* FOR DEBUGGING */
+static void
+dump_bytes(const char *msg,Dwarf_Small * start, long len)
+{
+    Dwarf_Small *end = start + len;
+    Dwarf_Small *cur = start;
+    printf("%s (0x%lx) ",msg,(unsigned long)start);
+    for (; cur < end; cur++) {
+        printf("%02x", *cur);
+    }
+    printf("\n");
+}
+/* Only used for debugging libdwarf. */
+static void dump_frame_rule(char *msg,
+    struct Dwarf_Reg_Rule_s *reg_rule);
+#endif /*0*/
 
 static int dwarf_initialize_fde_table(Dwarf_Debug dbg,
     struct Dwarf_Frame_s *fde_table,
@@ -57,23 +95,14 @@ static int dwarf_initialize_fde_table(Dwarf_Debug dbg,
 static void dwarf_free_fde_table(struct Dwarf_Frame_s *fde_table);
 static void dwarf_init_reg_rules_ru(struct Dwarf_Reg_Rule_s *base,
     unsigned first, unsigned last,int initial_value);
-static void dwarf_init_reg_rules_dw(struct Dwarf_Regtable_Entry_s *base,
+static void dwarf_init_reg_rules_dw3(
+    struct Dwarf_Regtable_Entry3_s *base,
     unsigned first, unsigned last,int initial_value);
-static void dwarf_init_reg_rules_dw3(struct Dwarf_Regtable_Entry3_s *base,
-    unsigned first, unsigned last,int initial_value);
-
-
-#if 0  /* FOR DEBUGGING */
-/* Only used for debugging libdwarf. */
-static void dump_frame_rule(char *msg,
-    struct Dwarf_Reg_Rule_s *reg_rule);
-#endif
-
 
 int
 dwarf_get_frame_section_name(Dwarf_Debug dbg,
-   const char **sec_name,
-   Dwarf_Error *error)
+    const char **sec_name,
+    Dwarf_Error *error)
 {
     struct Dwarf_Section_s *sec = 0;
     if (error != NULL) {
@@ -90,8 +119,8 @@ dwarf_get_frame_section_name(Dwarf_Debug dbg,
 
 int
 dwarf_get_frame_section_name_eh_gnu(Dwarf_Debug dbg,
-   const char **sec_name,
-   Dwarf_Error *error)
+    const char **sec_name,
+    Dwarf_Error *error)
 {
     struct Dwarf_Section_s *sec = 0;
     if (error != NULL) {
@@ -109,21 +138,19 @@ dwarf_get_frame_section_name_eh_gnu(Dwarf_Debug dbg,
 /*
     This function is the heart of the debug_frame stuff.  Don't even
     think of reading this without reading both the Libdwarf and
-    consumer API carefully first.  This function basically executes
+    consumer API carefully first.  This function executes
     frame instructions contained in a Cie or an Fde, but does in a
     number of different ways depending on the information sought.
     Start_instr_ptr points to the first byte of the frame instruction
-    stream, and final_instr_ptr to the to the first byte after the
-    last.
+    stream, and final_instr_ptr one past the last byte.
 
     The offsets returned in the frame instructions are factored.  That
     is they need to be multiplied by either the code_alignment_factor
     or the data_alignment_factor, as appropriate to obtain the actual
     offset.  This makes it possible to expand an instruction stream
     without the corresponding Cie.  However, when an Fde frame instr
-    sequence is being expanded there must be a valid Cie with a pointer
-    to an initial table row.
-
+    sequence is being expanded there must be a valid Cie
+    with a pointer to an initial table row.
 
     If successful, returns DW_DLV_OK
         And sets returned_count thru the pointer
@@ -141,12 +168,14 @@ dwarf_get_frame_section_name_eh_gnu(Dwarf_Debug dbg,
     Dwarf_Frame_Op structures containing the frame instructions
     executed.  A pointer to this list is returned in ret_frame_instr.
     Make_instr is true only when a list of frame instructions is to be
-    returned.  In this case since we are not interested in the contents
+    returned.  In this case since we are not interested
+    in the contents
     of the table, the input Cie can be NULL.  This is the only case
-    where the inpute Cie can be NULL.
+    where the input Cie can be NULL.
 
     (2) If search_pc is true, frame instructions are executed till
-    either a location is reached that is greater than the search_pc_val
+    either a location is reached that is greater than the
+    search_pc_val
     provided, or all instructions are executed.  At this point the
     last row of the table generated is returned in a structure.
     A pointer to this structure is supplied in table.
@@ -181,9 +210,39 @@ dwarf_get_frame_section_name_eh_gnu(Dwarf_Debug dbg,
 
 */
 
+/*  Cleans up the in-process linked list of these
+    in case of early exit in
+    _dwarf_exec_frame_instr.  */
+static void
+_dwarf_free_dfi_list(Dwarf_Frame_Instr fr)
+{
+    Dwarf_Frame_Instr cur = fr;
+    Dwarf_Frame_Instr next = 0;
+    for ( ; cur ; cur = next) {
+        next = cur->fi_next;
+        free(cur);
+    }
+}
+#if 0
+static void
+printlist(Dwarf_Frame_Instr x)
+{
+    int i = 0;
+    Dwarf_Frame_Instr nxt = 0;
+
+    printf("=========== print cur list of ptrs\n");
+    for ( ; x ; x = nxt,++i) {
+        printf("%d  inst 0x%lx nxt 0x%lx\n",
+            i,(unsigned long)x,
+            (unsigned long)x->fi_next);
+        nxt = x->fi_next;
+    }
+    printf("=========== done cur list of ptrs\n");
+}
+#endif /*0*/
+
 int
 _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
-    Dwarf_Frame_Op ** ret_frame_instr,
     Dwarf_Bool search_pc,
     Dwarf_Addr search_pc_val,
     Dwarf_Addr initial_loc,
@@ -193,9 +252,10 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
     Dwarf_Cie cie,
     Dwarf_Debug dbg,
     Dwarf_Half reg_num_of_cfa,
-    Dwarf_Sword * returned_count,
     Dwarf_Bool * has_more_rows,
     Dwarf_Addr * subsequent_pc,
+    Dwarf_Frame_Instr_Head *ret_frame_instr_head,
+    Dwarf_Unsigned * returned_frame_instr_count,
     Dwarf_Error *error)
 {
 /*  The following macro depends on macreg and
@@ -205,23 +265,39 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
 #define ERROR_IF_REG_NUM_TOO_HIGH(macreg,machigh_reg)        \
     do {                                                     \
         if ((macreg) >= (machigh_reg)) {                     \
-            SIMPLE_ERROR_RETURN(DW_DLE_DF_REG_NUM_TOO_HIGH); \
+            SER(DW_DLE_DF_REG_NUM_TOO_HIGH); \
         }                                                    \
     } /*CONSTCOND */ while (0)
-#define SIMPLE_ERROR_RETURN(code) \
-        free(localregtab);        \
+#define FREELOCALMALLOC                  \
+        _dwarf_free_dfi_list(ilisthead); \
+        free(dfi);                       \
+        free(localregtab);
+/* SER === SIMPLE_ERROR_RETURN */
+#define SER(code)                     \
+        FREELOCALMALLOC;              \
         _dwarf_error(dbg,error,code); \
+        return DW_DLV_ERROR
+#define SERSTRING(code,m)             \
+        FREELOCALMALLOC;              \
+        _dwarf_error_string(dbg,error,code,m); \
+        return DW_DLV_ERROR
+/*  m must be a quoted string */
+#define SERINST(m)                    \
+        FREELOCALMALLOC;              \
+        _dwarf_error_string(dbg,error,DW_DLE_ALLOC_FAIL, \
+            "DW_DLE_ALLOC_FAIL: " m); \
         return DW_DLV_ERROR
 
     /*  Sweeps the frame instructions. */
-    Dwarf_Small *instr_ptr;
+    Dwarf_Small *instr_ptr = 0;
+    Dwarf_Frame_Instr dfi = 0;
 
     /*  Register numbers not limited to just 255, thus not using
         Dwarf_Small.  */
     typedef unsigned reg_num_type;
 
-    Dwarf_Unsigned factored_N_value;
-    Dwarf_Signed signed_factored_N_value;
+    Dwarf_Unsigned factored_N_value = 0;
+    Dwarf_Signed signed_factored_N_value = 0;
     Dwarf_Addr current_loc = initial_loc;       /* code location/
         pc-value corresponding to the frame instructions.
         Starts at zero when the caller has no value to pass in. */
@@ -242,87 +318,85 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
 
     Dwarf_Addr possible_subsequent_pc = 0;
 
-    /*  Used by the DW_FRAME_advance_loc instr */
-    /*  to hold the increment in pc value.  */
-    Dwarf_Addr adv_pc;
-
     Dwarf_Half address_size = (cie)? cie->ci_address_size:
         dbg->de_pointer_size;
 
-    /*  Counts the number of frame instructions executed.  */
-    Dwarf_Word instr_count = 0;
-
-    /*  These contain the current fields of the current frame
-        instruction. */
-    Dwarf_Small fp_base_op = 0;
-    Dwarf_Small fp_extended_op;
-    reg_num_type fp_register;
-
-    /*  The value in fp_offset may be signed, though we call it
-        unsigned. This works ok for 2-s complement arithmetic. */
-    Dwarf_Unsigned fp_offset;
-    Dwarf_Off fp_instr_offset;
-
-    /*  Stack_table points to the row (Dwarf_Frame ie) being pushed or
-        popped by a remember or restore instruction. Top_stack points to
+    /*  Stack_table points to the row (Dwarf_Frame ie) being
+        pushed or popped by a remember or restore instruction.
+        Top_stack points to
         the top of the stack of rows. */
     Dwarf_Frame stack_table = NULL;
     Dwarf_Frame top_stack = NULL;
 
     /*  These are used only when make_instr is true. Curr_instr is a
         pointer to the current frame instruction executed.
-        Curr_instr_ptr, head_instr_list, and curr_instr_list are used to
-        form a chain of Dwarf_Frame_Op structs. Dealloc_instr_ptr is
+        Curr_instr_ptr, head_instr_list, and curr_instr_list are
+        used to form a chain of Dwarf_Frame_Op structs.
+        Dealloc_instr_ptr is
         used to deallocate the structs used to form the chain.
-        Head_instr_block points to a contiguous list of pointers to the
+        Head_instr_block points to a contiguous list of
+        pointers to the
         Dwarf_Frame_Op structs executed. */
-    Dwarf_Frame_Op *curr_instr;
-    Dwarf_Chain curr_instr_item, dealloc_instr_item;
-    Dwarf_Chain head_instr_chain = NULL;
-    Dwarf_Chain tail_instr_chain = NULL;
-    Dwarf_Frame_Op *head_instr_block;
+    /*  Build single linked list of instrs, and
+        at end turn into array. */
+    Dwarf_Frame_Instr ilisthead = 0;
+    Dwarf_Frame_Instr *ilistlastptr = &ilisthead;
+    /*  Counts the number of frame instructions
+        in the returned instrs if instruction
+        details are asked for. Else 0. */
+    Dwarf_Unsigned instr_count = 0;
 
     /*  These are the alignment_factors taken from the Cie provided.
         When no input Cie is provided they are set to 1, because only
         factored offsets are required. */
-    Dwarf_Sword code_alignment_factor = 1;
-    Dwarf_Sword data_alignment_factor = 1;
+    Dwarf_Signed code_alignment_factor = 1;
+    Dwarf_Signed data_alignment_factor = 1;
 
-    /*  This flag indicates when an actual alignment factor is needed.
-        So if a frame instruction that computes an offset using an
-        alignment factor is encountered when this flag is set, an error
-        is returned because the Cie did not have a valid augmentation. */
+    /*  This flag indicates when an actual alignment factor
+        is needed.
+        So if a frame instruction that computes an offset
+        using an alignment factor is encountered when this
+        flag is set, an error is returned because the Cie
+        did not have a valid augmentation. */
     Dwarf_Bool need_augmentation = false;
+    Dwarf_Unsigned instr_area_length = 0;
 
-    Dwarf_Word i;
+    Dwarf_Unsigned i = 0;
 
-    /*  Initialize first row from associated Cie. Using temp regs
-        explicity */
+    /*  Initialize first row from associated Cie.
+        Using temp regs explicitly */
 
-    if (localregtab == 0) {
-        SIMPLE_ERROR_RETURN(DW_DLE_ALLOC_FAIL);
+    if (!localregtab) {
+        SER(DW_DLE_ALLOC_FAIL);
     }
     {
         struct Dwarf_Reg_Rule_s *t1reg = localregtab;
         if (cie != NULL && cie->ci_initial_table != NULL) {
             unsigned minregcount = 0;
             unsigned curreg = 0;
-            struct Dwarf_Reg_Rule_s *t2reg = cie->ci_initial_table->fr_reg;
+            struct Dwarf_Reg_Rule_s *t2reg =
+                cie->ci_initial_table->fr_reg;
 
             if (reg_count != cie->ci_initial_table->fr_reg_count) {
-                /*  Should never happen, it makes no sense to have the
-                    table sizes change. There is no real allowance for
-                    the set of registers to change dynamically in a
-                    single Dwarf_Debug (except the size can be set near
-                    initial Dwarf_Debug creation time). */
-                SIMPLE_ERROR_RETURN
-                    (DW_DLE_FRAME_REGISTER_COUNT_MISMATCH);
+                /*  Should never happen,
+                    it makes no sense to have the
+                    table sizes change. There
+                    is no real allowance for
+                    the set of registers
+                    to change dynamically
+                    in a single Dwarf_Debug
+                    (except the size can be set
+                    near initial Dwarf_Debug
+                    creation time). */
+                SER(DW_DLE_FRAME_REGISTER_COUNT_MISMATCH);
             }
-            minregcount = MIN(reg_count,cie->ci_initial_table->fr_reg_count);
-            for (; curreg < minregcount ;curreg++, t1reg++, t2reg++) {
+            minregcount =
+                MIN(reg_count,cie->ci_initial_table->fr_reg_count);
+            for ( ; curreg < minregcount ;
+                curreg++, t1reg++, t2reg++) {
                 *t1reg = *t2reg;
-            }
-            cfa_reg = cie->ci_initial_table->fr_cfa_rule;
+            } cfa_reg =
+            cie->ci_initial_table->fr_cfa_rule;
         } else {
             dwarf_init_reg_rules_ru(localregtab,0,reg_count,
                 dbg->de_frame_rule_initial_value);
@@ -330,716 +404,1025 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
                 dbg->de_frame_rule_initial_value);
         }
     }
-
     /*  The idea here is that the code_alignment_factor and
-        data_alignment_factor which are needed for certain instructions
-        are valid only when the Cie has a proper augmentation string. So
-        if the augmentation is not right, only Frame instruction can be
-        read. */
+        data_alignment_factor which are needed for certain
+        instructions are valid only when the Cie has a proper
+        augmentation string. So if the augmentation is not
+        right, only Frame instruction can be read. */
     if (cie != NULL && cie->ci_augmentation != NULL) {
         code_alignment_factor = cie->ci_code_alignment_factor;
         data_alignment_factor = cie->ci_data_alignment_factor;
     } else {
         need_augmentation = !make_instr;
     }
-
     instr_ptr = start_instr_ptr;
+    instr_area_length = (uintptr_t)
+        (final_instr_ptr - start_instr_ptr);
     while ((instr_ptr < final_instr_ptr) && (!search_over)) {
-        Dwarf_Small instr = 0;
-        Dwarf_Small opcode = 0;
-        reg_num_type reg_no = 0;
+        Dwarf_Small   instr = 0;
+        Dwarf_Small   opcode = 0;
+        reg_num_type  reg_no = 0;
+        Dwarf_Unsigned adv_pc = 0;
+        Dwarf_Off fp_instr_offset = 0;
+        Dwarf_Small * base_instr_ptr = 0;
+
+        if (instr_ptr < start_instr_ptr) {
+            SERINST("DW_DLE_DF_NEW_LOC_LESS_OLD_LOC: "
+                "Following instruction bytes we find impossible "
+                "decrease in a pointer");
+        }
 
         fp_instr_offset = instr_ptr - start_instr_ptr;
         instr = *(Dwarf_Small *) instr_ptr;
         instr_ptr += sizeof(Dwarf_Small);
-
-        fp_base_op = (instr & 0xc0) >> 6;
+        base_instr_ptr = instr_ptr;
         if ((instr & 0xc0) == 0x00) {
             opcode = instr;     /* is really extended op */
-            fp_extended_op = (instr & (~(0xc0))) & 0xff;
         } else {
             opcode = instr & 0xc0;      /* is base op */
-            fp_extended_op = 0;
+        }
+        if (make_instr) {
+            dfi = calloc(1,sizeof(*dfi));
+            if (!dfi) {
+                SERINST("DW_CFA_advance_loc out of memory");
+            }
+            dfi->fi_op = opcode;
+            dfi->fi_instr_offset = fp_instr_offset;
+            dfi->fi_fields = "";
+        }
+        switch (opcode) {
+        case DW_CFA_lo_user: {
+            if (make_instr) {
+                dfi->fi_fields = "";
+            }
+        }
+        break;
+        case DW_CFA_advance_loc: {
+            Dwarf_Unsigned adv_pc_val = 0;
+
+            /* base op */
+            adv_pc_val = instr &DW_FRAME_INSTR_OFFSET_MASK;
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            adv_pc = adv_pc_val * code_alignment_factor;
+            possible_subsequent_pc =  current_loc + adv_pc;
+            search_over = search_pc &&
+                (possible_subsequent_pc > search_pc_val);
+            /* If gone past pc needed, retain old pc.  */
+            if (!search_over) {
+                current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "uc";
+                dfi->fi_u0 = adv_pc_val;
+                dfi->fi_code_align_factor = code_alignment_factor;
+            }
+            }
+            break;
+        case DW_CFA_offset: {  /* base op */
+            int adres = 0;
+            reg_no = (reg_num_type) (instr &
+                DW_FRAME_INSTR_OFFSET_MASK);
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER( DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            localregtab[reg_no].ru_is_offset = 1;
+            localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_no].ru_register = reg_num_of_cfa;
+            localregtab[reg_no].ru_offset =
+                factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "rud";
+                dfi->fi_u0 = reg_no;
+                dfi->fi_u1 = factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
+            }
+            break;
+        case DW_CFA_restore: { /* base op */
+            reg_no = (instr & DW_FRAME_INSTR_OFFSET_MASK);
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+
+            if (cie != NULL && cie->ci_initial_table != NULL) {
+                localregtab[reg_no] =
+                    cie->ci_initial_table->fr_reg[reg_no];
+            } else if (!make_instr) {
+                SER(DW_DLE_DF_MAKE_INSTR_NO_INIT);
+            }
+            if (make_instr) {
+                dfi->fi_fields = "r";
+                dfi->fi_u0 = reg_no;
+            }
+            }
+            break;
+        case DW_CFA_set_loc: {
+            Dwarf_Addr new_loc = 0;
+            int adres = 0;
+            adres=_dwarf_read_unaligned_ck_wrapper(dbg,
+                &new_loc,
+                instr_ptr, address_size,
+                final_instr_ptr,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            instr_ptr += address_size;
+            if (new_loc != 0 && current_loc != 0) {
+                /*  Pre-relocation or before current_loc
+                    is set the test comparing new_loc
+                    and current_loc makes no
+                    sense. Testing for non-zero (above) is a way
+                    (fallible) to check that current_loc, new_loc
+                    are already relocated.  */
+                if (new_loc <= current_loc) {
+                    /*  Within a frame, address must increase.
+                    Seemingly it has not.
+                    Seems to be an error. */
+                    SER(DW_DLE_DF_NEW_LOC_LESS_OLD_LOC);
+                }
+            }
+            search_over = search_pc && (new_loc > search_pc_val);
+            /* If gone past pc needed, retain old pc.  */
+            possible_subsequent_pc =  new_loc;
+            if (!search_over) {
+                current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "u";
+                dfi->fi_u0 = new_loc;
+            }
+            }
+            break;
+        case DW_CFA_advance_loc1:
+        {
+            int adres = 0;
+            Dwarf_Unsigned advloc_val = 0;
+            adres=_dwarf_read_unaligned_ck_wrapper(dbg,
+                &advloc_val,
+                instr_ptr, sizeof(Dwarf_Small),
+                final_instr_ptr,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            instr_ptr += sizeof(Dwarf_Small);
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            adv_loc =  advloc_val*code_alignment_factor;
+
+            possible_subsequent_pc =  current_loc + adv_loc;
+            search_over = search_pc &&
+            (possible_subsequent_pc > search_pc_val);
+
+            /* If gone past pc needed, retain old pc.  */
+            if (!search_over) {
+                current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "uc";
+                dfi->fi_u0 = advloc_val;
+                dfi->fi_code_align_factor =
+                    code_alignment_factor;
+            }
+            break;
         }
 
-        fp_register = 0;
-        fp_offset = 0;
-        switch (opcode) {
-        case DW_CFA_advance_loc:
-            {
-                /* base op */
-                fp_offset = adv_pc = instr & DW_FRAME_INSTR_OFFSET_MASK;
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                adv_pc = adv_pc * code_alignment_factor;
-                possible_subsequent_pc =  current_loc + adv_pc;
-                search_over = search_pc &&
-                    (possible_subsequent_pc > search_pc_val);
-                /* If gone past pc needed, retain old pc.  */
-                if (!search_over) {
-                    current_loc = possible_subsequent_pc;
-                }
-                break;
-            }
-
-        case DW_CFA_offset:
-            {                   /* base op */
-                reg_no =
-                    (reg_num_type) (instr & DW_FRAME_INSTR_OFFSET_MASK);
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                fp_register = reg_no;
-                fp_offset = factored_N_value;
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-
-                localregtab[reg_no].ru_is_off = 1;
-                localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_no].ru_register = reg_num_of_cfa;
-                localregtab[reg_no].ru_offset_or_block_len =
-                    factored_N_value * data_alignment_factor;
-
-                break;
-            }
-
-        case DW_CFA_restore:
-            {                   /* base op */
-                reg_no = (instr & DW_FRAME_INSTR_OFFSET_MASK);
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                fp_register = reg_no;
-
-                if (cie != NULL && cie->ci_initial_table != NULL)
-                    localregtab[reg_no] =
-                        cie->ci_initial_table->fr_reg[reg_no];
-                else if (!make_instr) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_MAKE_INSTR_NO_INIT);
-                }
-
-                break;
-            }
-        case DW_CFA_set_loc:
-            {
-                Dwarf_Addr new_loc = 0;
-
-                READ_UNALIGNED_CK(dbg, new_loc, Dwarf_Addr,
-                    instr_ptr, address_size,
-                    error,final_instr_ptr);
-                instr_ptr += address_size;
-                if (new_loc != 0 && current_loc != 0) {
-                    /*  Pre-relocation or before current_loc is set the
-                        test comparing new_loc and current_loc makes no
-                        sense. Testing for non-zero (above) is a way
-                        (fallible) to check that current_loc, new_loc
-                        are already relocated.  */
-                    if (new_loc <= current_loc) {
-                        /*  Within a frame, address must increase.
-                            Seemingly it has not.
-                            Seems to be an error. */
-                        SIMPLE_ERROR_RETURN
-                            (DW_DLE_DF_NEW_LOC_LESS_OLD_LOC);
-                    }
-                }
-
-                search_over = search_pc && (new_loc > search_pc_val);
-
-                /* If gone past pc needed, retain old pc.  */
-                possible_subsequent_pc =  new_loc;
-                if (!search_over) {
-                    current_loc = possible_subsequent_pc;
-                }
-                fp_offset = new_loc;
-                break;
-            }
-
-        case DW_CFA_advance_loc1:
-            {
-                READ_UNALIGNED_CK(dbg, adv_loc, Dwarf_Unsigned,
-                    instr_ptr, sizeof(Dwarf_Small),
-                    error,final_instr_ptr);
-                instr_ptr += sizeof(Dwarf_Small);
-                fp_offset = adv_loc;
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                adv_loc *= code_alignment_factor;
-
-                possible_subsequent_pc =  current_loc + adv_loc;
-                search_over = search_pc &&
-                    (possible_subsequent_pc > search_pc_val);
-
-                /* If gone past pc needed, retain old pc.  */
-                if (!search_over) {
-                    current_loc = possible_subsequent_pc;
-                }
-                break;
-            }
-
         case DW_CFA_advance_loc2:
-            {
-                READ_UNALIGNED_CK(dbg, adv_loc, Dwarf_Unsigned,
-                    instr_ptr, DWARF_HALF_SIZE,
-                    error,final_instr_ptr);
-                instr_ptr += DWARF_HALF_SIZE;
-                fp_offset = adv_loc;
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                adv_loc *= code_alignment_factor;
-
-                possible_subsequent_pc =  current_loc + adv_loc;
-                search_over = search_pc &&
-                    (possible_subsequent_pc > search_pc_val);
-                /* If gone past pc needed, retain old pc.  */
-                if (!search_over) {
-                    current_loc = possible_subsequent_pc;
-                }
-                break;
+        {
+            int adres = 0;
+            Dwarf_Unsigned advloc_val = 0;
+            adres=_dwarf_read_unaligned_ck_wrapper(dbg, &advloc_val,
+                instr_ptr, DWARF_HALF_SIZE,
+                final_instr_ptr,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            instr_ptr += DWARF_HALF_SIZE;
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            adv_loc = advloc_val* code_alignment_factor;
+            possible_subsequent_pc =  current_loc + adv_loc;
+            search_over = search_pc &&
+            (possible_subsequent_pc > search_pc_val);
+            /* If gone past pc needed, retain old pc.  */
+            if (!search_over) {
+                current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "uc";
+                dfi->fi_u0 = advloc_val;
+                dfi->fi_code_align_factor =
+                    code_alignment_factor;
+            }
+            break;
+        }
 
         case DW_CFA_advance_loc4:
-            {
-                READ_UNALIGNED_CK(dbg, adv_loc, Dwarf_Unsigned,
-                    instr_ptr, DWARF_32BIT_SIZE,
-                    error,final_instr_ptr);
-                instr_ptr += DWARF_32BIT_SIZE;
-                fp_offset = adv_loc;
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                adv_loc *= code_alignment_factor;
-
-                possible_subsequent_pc =  current_loc + adv_loc;
-                search_over = search_pc &&
-                    (possible_subsequent_pc > search_pc_val);
-                /* If gone past pc needed, retain old pc.  */
-                if (!search_over) {
-                    current_loc = possible_subsequent_pc;
-                }
-                break;
+        {
+            int adres = 0;
+            Dwarf_Unsigned advloc_val = 0;
+            adres=_dwarf_read_unaligned_ck_wrapper(dbg, &advloc_val,
+            instr_ptr,  DWARF_32BIT_SIZE,
+            final_instr_ptr,error);
+            if (adres != DW_DLV_OK) {
+            free(localregtab);
+            return adres;
             }
+            instr_ptr += DWARF_32BIT_SIZE;
+            if (need_augmentation) {
+            SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            adv_loc = advloc_val* code_alignment_factor;
+
+            possible_subsequent_pc =  current_loc + adv_loc;
+            search_over = search_pc &&
+                (possible_subsequent_pc > search_pc_val);
+            /* If gone past pc needed, retain old pc.  */
+            if (!search_over) {
+                current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "uc";
+                dfi->fi_u0 = advloc_val;
+                dfi->fi_code_align_factor =
+                    code_alignment_factor;
+            }
+            break;
+        }
+        case DW_CFA_MIPS_advance_loc8:
+        {
+            int adres = 0;
+            Dwarf_Unsigned advloc_val = 0;
+            adres=_dwarf_read_unaligned_ck_wrapper(dbg, &advloc_val,
+                instr_ptr,  DWARF_64BIT_SIZE,
+                final_instr_ptr,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            instr_ptr += DWARF_64BIT_SIZE;
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            adv_loc = advloc_val * code_alignment_factor;
+            possible_subsequent_pc =  current_loc + adv_loc;
+            search_over = search_pc &&
+            (possible_subsequent_pc > search_pc_val);
+            /* If gone past pc needed, retain old pc.  */
+            if (!search_over) {
+            current_loc = possible_subsequent_pc;
+            }
+            if (make_instr) {
+                dfi->fi_fields = "u";
+                dfi->fi_u0 = advloc_val;
+                dfi->fi_code_align_factor =
+                    code_alignment_factor;
+            }
+            break;
+        }
 
         case DW_CFA_offset_extended:
-            {
-                Dwarf_Unsigned lreg;
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                localregtab[reg_no].ru_is_off = 1;
-                localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_no].ru_register = reg_num_of_cfa;
-                localregtab[reg_no].ru_offset_or_block_len = factored_N_value *
-                    data_alignment_factor;
-
-                fp_register = reg_no;
-                fp_offset = factored_N_value;
-                break;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            localregtab[reg_no].ru_is_offset = 1;
+            localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_no].ru_register = reg_num_of_cfa;
+            localregtab[reg_no].ru_offset =
+                factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "rud";
+                dfi->fi_u0 = lreg;
+                dfi->fi_u1 = factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
+            break;
+        }
 
         case DW_CFA_restore_extended:
-            {
-                Dwarf_Unsigned lreg;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                if (cie != NULL && cie->ci_initial_table != NULL) {
-                    localregtab[reg_no] = cie->ci_initial_table->fr_reg[reg_no];
-                } else {
-                    if (!make_instr) {
-                        SIMPLE_ERROR_RETURN
-                            (DW_DLE_DF_MAKE_INSTR_NO_INIT);
-                    }
-                }
-
-                fp_register = reg_no;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            if (cie != NULL && cie->ci_initial_table != NULL) {
+                localregtab[reg_no] =
+                    cie->ci_initial_table->fr_reg[reg_no];
+            } else {
+                if (!make_instr) {
+                    SER(DW_DLE_DF_MAKE_INSTR_NO_INIT);
+                }
+            }
+            if (make_instr) {
+                dfi->fi_fields = "r";
+                dfi->fi_u0 = lreg;
+            }
+            break;
+        }
 
         case DW_CFA_undefined:
-            {
-                Dwarf_Unsigned lreg;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                localregtab[reg_no].ru_is_off = 0;
-                localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_no].ru_register =
-                    dbg->de_frame_undefined_value_number;
-                localregtab[reg_no].ru_offset_or_block_len = 0;
-
-                fp_register = reg_no;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            localregtab[reg_no].ru_is_offset = 0;
+            localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_no].ru_register =
+                dbg->de_frame_undefined_value_number;
+            localregtab[reg_no].ru_offset = 0;
+            if (make_instr) {
+                dfi->fi_fields = "r";
+                dfi->fi_u0 = lreg;
+            }
+            break;
+        }
 
         case DW_CFA_same_value:
-            {
-                Dwarf_Unsigned lreg;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                localregtab[reg_no].ru_is_off = 0;
-                localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_no].ru_register =
-                    dbg->de_frame_same_value_number;
-                localregtab[reg_no].ru_offset_or_block_len = 0;
-                fp_register = reg_no;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            localregtab[reg_no].ru_is_offset = 0;
+            localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_no].ru_register =
+                dbg->de_frame_same_value_number;
+            localregtab[reg_no].ru_offset = 0;
+            if (make_instr) {
+                dfi->fi_fields = "r";
+                dfi->fi_u0 = lreg;
+            }
+            break;
+        }
 
         case DW_CFA_register:
-            {
-                Dwarf_Unsigned lreg;
-                reg_num_type reg_noA = 0;
-                reg_num_type reg_noB = 0;
+        {
+            Dwarf_Unsigned lreg;
+            reg_num_type reg_noA = 0;
+            reg_num_type reg_noB = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_noA = (reg_num_type) lreg;
-
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_noA, reg_count);
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_noB = (reg_num_type) lreg;
-
-                if (reg_noB > reg_count) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_REG_NUM_TOO_HIGH);
-                }
-
-
-                localregtab[reg_noA].ru_is_off = 0;
-                localregtab[reg_noA].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_noA].ru_register = reg_noB;
-                localregtab[reg_noA].ru_offset_or_block_len = 0;
-
-                fp_register = reg_noA;
-                fp_offset = reg_noB;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+            &lreg,error);
+                if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_noA = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_noA, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            reg_noB = (reg_num_type) lreg;
+            if (reg_noB > reg_count) {
+                SER(DW_DLE_DF_REG_NUM_TOO_HIGH);
+            }
+            localregtab[reg_noA].ru_is_offset = 0;
+            localregtab[reg_noA].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_noA].ru_register = reg_noB;
+            localregtab[reg_noA].ru_offset = 0;
+            if (make_instr) {
+                dfi->fi_fields = "rr";
+                dfi->fi_u0 = reg_noA;
+                dfi->fi_u1 = reg_noB;
+            }
+            break;
+        }
 
         case DW_CFA_remember_state:
-            {
-                stack_table = (Dwarf_Frame)
-                    _dwarf_get_alloc(dbg, DW_DLA_FRAME, 1);
-                if (stack_table == NULL) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_ALLOC_FAIL);
-                }
-
-                for (i = 0; i < reg_count; i++)
-                    stack_table->fr_reg[i] = localregtab[i];
-                stack_table->fr_cfa_rule = cfa_reg;
-
-                if (top_stack != NULL)
-                    stack_table->fr_next = top_stack;
-                top_stack = stack_table;
-
-                break;
+        {
+            stack_table = (Dwarf_Frame)
+            _dwarf_get_alloc(dbg, DW_DLA_FRAME, 1);
+            if (stack_table == NULL) {
+                SER(DW_DLE_DF_ALLOC_FAIL);
             }
-
+            for (i = 0; i < reg_count; i++) {
+                stack_table->fr_reg[i] = localregtab[i];
+            }
+            stack_table->fr_cfa_rule = cfa_reg;
+            if (top_stack != NULL) {
+                stack_table->fr_next = top_stack;
+            }
+            top_stack = stack_table;
+            if (make_instr) {
+                dfi->fi_fields = "";
+            }
+            }
+            break;
         case DW_CFA_restore_state:
-            {
-                if (top_stack == NULL) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_POP_EMPTY_STACK);
-                }
-                stack_table = top_stack;
-                top_stack = stack_table->fr_next;
-
-                for (i = 0; i < reg_count; i++)
-                    localregtab[i] = stack_table->fr_reg[i];
-                cfa_reg = stack_table->fr_cfa_rule;
-
-                dwarf_dealloc(dbg, stack_table, DW_DLA_FRAME);
-                break;
+        {
+            if (top_stack == NULL) {
+                SER(DW_DLE_DF_POP_EMPTY_STACK);
             }
+            stack_table = top_stack;
+            top_stack = stack_table->fr_next;
+            for (i = 0; i < reg_count; i++) {
+                localregtab[i] = stack_table->fr_reg[i];
+            }
+            cfa_reg = stack_table->fr_cfa_rule;
+            dwarf_dealloc(dbg, stack_table, DW_DLA_FRAME);
+            if (make_instr) {
+                dfi->fi_fields = "";
+            }
+            break;
+        }
 
         case DW_CFA_def_cfa:
-            {
-                Dwarf_Unsigned lreg;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
+            Dwarf_Off nonfactoredoffset = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                cfa_reg.ru_is_off = 1;
-                cfa_reg.ru_value_type = DW_EXPR_OFFSET;
-                cfa_reg.ru_register = reg_no;
-                cfa_reg.ru_offset_or_block_len = factored_N_value;
-
-                fp_register = reg_no;
-                fp_offset = factored_N_value;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &nonfactoredoffset,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            cfa_reg.ru_is_offset = 1;
+            cfa_reg.ru_value_type = DW_EXPR_OFFSET;
+            cfa_reg.ru_register = reg_no;
+            cfa_reg.ru_offset = nonfactoredoffset;
+            if (make_instr) {
+                dfi->fi_fields = "ru";
+                dfi->fi_u0 = lreg;
+                dfi->fi_u1 = nonfactoredoffset;
+            }
+            break;
+        }
 
         case DW_CFA_def_cfa_register:
-            {
-                Dwarf_Unsigned lreg;
+        {
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                cfa_reg.ru_register = reg_no;
-                /*  Do NOT set ru_offset_or_block_len or ru_is_off here.
-                    See dwarf2/3 spec.  */
-                fp_register = reg_no;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            cfa_reg.ru_register = reg_no;
+            /*  Do NOT set ru_offset_or_block_len or
+                ru_is_off here.
+                See dwarf2/3 spec.  */
+            if (make_instr) {
+                dfi->fi_fields = "r";
+                dfi->fi_u0 = lreg;
+            }
+            break;
+        }
 
         case DW_CFA_def_cfa_offset:
-            {
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                /*  Do set ru_is_off here, as here factored_N_value
-                    counts.  */
-                cfa_reg.ru_is_off = 1;
-                cfa_reg.ru_value_type = DW_EXPR_OFFSET;
-                cfa_reg.ru_offset_or_block_len = factored_N_value;
-
-                fp_offset = factored_N_value;
-                break;
+        {
+            int adres = 0;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            /*  Do set ru_is_off here, as here factored_N_value
+                counts.  */
+            cfa_reg.ru_is_offset = 1;
+            cfa_reg.ru_value_type = DW_EXPR_OFFSET;
+            cfa_reg.ru_offset = factored_N_value;
+            if (make_instr) {
+                dfi->fi_fields = "u";
+                dfi->fi_u0 = factored_N_value;
+            }
+            break;
+        }
         /*  This is for Metaware with augmentation string HC
             We do not really know what to do with it. */
         case DW_CFA_METAWARE_info:
-            {
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                /* Not really known what the value means or is. */
-                cfa_reg.ru_is_off = 1;
-                cfa_reg.ru_value_type = DW_EXPR_OFFSET;
-                cfa_reg.ru_offset_or_block_len = factored_N_value;
-
-                break;
+        {
+            int adres = 0;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
             }
+            /* Not really known what the value means or is. */
+            cfa_reg.ru_is_offset = 1;
+            cfa_reg.ru_value_type = DW_EXPR_OFFSET;
+            cfa_reg.ru_offset = factored_N_value;
+            if (make_instr) {
+                dfi->fi_fields = "u";
+                dfi->fi_u0 = factored_N_value;
+            }
+            break;
+        }
         case DW_CFA_nop:
-            {
-                break;
-            }
-            /* DWARF3 ops begin here. */
-        case DW_CFA_def_cfa_expression:
-            {
-                /*  A single DW_FORM_block representing a dwarf
-                    expression. The form block establishes the way to
-                    compute the CFA. */
-                Dwarf_Unsigned block_len = 0;
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, block_len,
-                    dbg,error,final_instr_ptr);
-                cfa_reg.ru_is_off = 0;  /* arbitrary */
-                cfa_reg.ru_value_type = DW_EXPR_EXPRESSION;
-                cfa_reg.ru_offset_or_block_len = block_len;
-                cfa_reg.ru_block = instr_ptr;
-                fp_offset = (Dwarf_Unsigned) instr_ptr;
-                instr_ptr += block_len;
+        {
+            if (make_instr) {
+                dfi->fi_fields = "";
             }
             break;
-        case DW_CFA_expression:
-            {
-                /*  An unsigned leb128 value is the first operand (a
-                    register number). The second operand is single
-                    DW_FORM_block representing a dwarf expression. The
-                    evaluator pushes the CFA on the evaluation stack
-                    then evaluates the expression to compute the value
-                    of the register contents. */
-                Dwarf_Unsigned lreg = 0;
-                Dwarf_Unsigned block_len = 0;
+        }
+        /* DWARF3 ops begin here. */
+        case DW_CFA_def_cfa_expression: {
+            /*  A single DW_FORM_block representing a dwarf
+                expression. The form block establishes the way to
+                compute the CFA. */
+            Dwarf_Unsigned block_len = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-                DECODE_LEB128_UWORD_CK(instr_ptr, block_len,
-                    dbg,error,final_instr_ptr);
-                localregtab[lreg].ru_is_off = 0;        /* arbitrary */
-                localregtab[lreg].ru_value_type = DW_EXPR_EXPRESSION;
-                localregtab[lreg].ru_offset_or_block_len = block_len;
-                localregtab[lreg].ru_block = instr_ptr;
-                fp_offset = (Dwarf_Unsigned) instr_ptr;
-                fp_register = reg_no;
-                instr_ptr += block_len;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &block_len,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            cfa_reg.ru_is_offset = 0;  /* arbitrary */
+            cfa_reg.ru_value_type = DW_EXPR_EXPRESSION;
+            cfa_reg.ru_block.bl_len = block_len;
+            cfa_reg.ru_block.bl_data = instr_ptr;
+            if (make_instr) {
+                dfi->fi_fields = "b";
+                dfi->fi_expr.bl_len = block_len;
+                dfi->fi_expr.bl_data = instr_ptr;
+            }
+            instr_ptr += block_len;
+            if (instr_area_length < block_len ||
+                instr_ptr < base_instr_ptr) {
+                SERSTRING(DW_DLE_DF_FRAME_DECODING_ERROR,
+                    "DW_DLE_DF_FRAME_DECODING_ERROR: "
+                    "DW_CFA_def_cfa_expression "
+                    "block len overflows instructions "
+                    "available range.");
+            }
+        }
+        break;
+        case DW_CFA_expression: {
+            /*  An unsigned leb128 value is the first operand (a
+            register number). The second operand is single
+            DW_FORM_block representing a dwarf expression. The
+            evaluator pushes the CFA on the evaluation stack
+            then evaluates the expression to compute the value
+            of the register contents. */
+            Dwarf_Unsigned lreg = 0;
+            Dwarf_Unsigned block_len = 0;
+            int adres = 0;
+
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &block_len,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            localregtab[lreg].ru_is_offset = 0; /* arbitrary */
+            localregtab[lreg].ru_value_type = DW_EXPR_EXPRESSION;
+            localregtab[lreg].ru_block.bl_data = instr_ptr;
+            localregtab[lreg].ru_block.bl_len = block_len;
+            if (make_instr) {
+                dfi->fi_fields = "rb";
+                dfi->fi_u0 = lreg;
+                dfi->fi_expr.bl_len = block_len;
+                dfi->fi_expr.bl_data = instr_ptr;
+            }
+            instr_ptr += block_len;
+            if (instr_area_length < block_len ||
+                instr_ptr < base_instr_ptr) {
+                SERSTRING(DW_DLE_DF_FRAME_DECODING_ERROR,
+                    "DW_DLE_DF_FRAME_DECODING_ERROR: "
+                    "DW_CFA_expression "
+                    "block len overflows instructions "
+                    "available range.");
+            }
             }
             break;
-        case DW_CFA_offset_extended_sf:
-            {
-                /*  The first operand is an unsigned leb128 register
-                    number. The second is a signed factored offset.
-                    Identical to DW_CFA_offset_extended except the
-                    second operand is signed */
-                Dwarf_Unsigned lreg;
+        case DW_CFA_offset_extended_sf: {
+            /*  The first operand is an unsigned leb128 register
+                number. The second is a signed factored offset.
+                Identical to DW_CFA_offset_extended except the
+                second operand is signed */
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                DECODE_LEB128_SWORD_CK(instr_ptr, signed_factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                localregtab[reg_no].ru_is_off = 1;
-                localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
-                localregtab[reg_no].ru_register = reg_num_of_cfa;
-                localregtab[reg_no].ru_offset_or_block_len =
-                    signed_factored_N_value * data_alignment_factor;
-
-                fp_register = reg_no;
-                fp_offset = signed_factored_N_value;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_sword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &signed_factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            localregtab[reg_no].ru_is_offset = 1;
+            localregtab[reg_no].ru_value_type = DW_EXPR_OFFSET;
+            localregtab[reg_no].ru_register = reg_num_of_cfa;
+            localregtab[reg_no].ru_offset =
+                signed_factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "rsd";
+                dfi->fi_u0 = lreg;
+                dfi->fi_s1 = signed_factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
             }
             break;
-        case DW_CFA_def_cfa_sf:
-            {
-                /*  The first operand is an unsigned leb128 register
-                    number. The second is a signed leb128 factored
-                    offset. Identical to DW_CFA_def_cfa except that the
-                    second operand is signed and factored. */
-                Dwarf_Unsigned lreg;
+        case DW_CFA_def_cfa_sf: {
+            /*  The first operand is an unsigned leb128 register
+                number. The second is a signed leb128 factored
+                offset. Identical to DW_CFA_def_cfa except
+                that the second operand is signed
+                and factored. */
+            Dwarf_Unsigned lreg;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                free(localregtab);
+                return adres;
+            }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_sword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &signed_factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                free(localregtab);
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            cfa_reg.ru_is_offset = 1;
+            cfa_reg.ru_value_type = DW_EXPR_OFFSET;
+            cfa_reg.ru_register = reg_no;
+            cfa_reg.ru_offset =
+                signed_factored_N_value * data_alignment_factor;
 
-                DECODE_LEB128_SWORD_CK(instr_ptr, signed_factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                cfa_reg.ru_is_off = 1;
-                cfa_reg.ru_value_type = DW_EXPR_OFFSET;
-                cfa_reg.ru_register = reg_no;
-                cfa_reg.ru_offset_or_block_len =
-                    signed_factored_N_value * data_alignment_factor;
-
-                fp_register = reg_no;
-                fp_offset = signed_factored_N_value;
+            if (make_instr) {
+                dfi->fi_fields = "rsd";
+                dfi->fi_u0 = lreg;
+                dfi->fi_s1 = signed_factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
             }
             break;
-        case DW_CFA_def_cfa_offset_sf:
-            {
-                /*  The operand is a signed leb128 operand representing
-                    a factored offset.  Identical to
-                    DW_CFA_def_cfa_offset excep the operand is signed
-                    and factored. */
+        case DW_CFA_def_cfa_offset_sf: {
+            /*  The operand is a signed leb128 operand
+                representing a factored offset.  Identical to
+                DW_CFA_def_cfa_offset except the operand is
+                signed and factored. */
+            int adres = 0;
 
-                DECODE_LEB128_SWORD_CK(instr_ptr, signed_factored_N_value,
-                    dbg,error,final_instr_ptr);
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                /*  Do set ru_is_off here, as here factored_N_value
-                    counts.  */
-                cfa_reg.ru_is_off = 1;
-                cfa_reg.ru_value_type = DW_EXPR_OFFSET;
-                cfa_reg.ru_offset_or_block_len =
-                    signed_factored_N_value * data_alignment_factor;
-
-                fp_offset = signed_factored_N_value;
+            adres = _dwarf_leb128_sword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &signed_factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            /*  Do set ru_is_off here, as here factored_N_value
+                counts.  */
+            cfa_reg.ru_is_offset = 1;
+            cfa_reg.ru_value_type = DW_EXPR_OFFSET;
+            cfa_reg.ru_offset =
+                signed_factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "sd";
+                dfi->fi_s0 = signed_factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
             }
             break;
-        case DW_CFA_val_offset:
-            {
-                /*  The first operand is an unsigned leb128 register
-                    number. The second is a factored unsigned offset.
-                    Makes the register be a val_offset(N) rule with N =
-                    factored_offset*data_alignment_factor. */
+        case DW_CFA_val_offset: {
+            /*  The first operand is an unsigned leb128 register
+                number. The second is a factored unsigned offset.
+                Makes the register be a val_offset(N)
+                rule with N =
+                factored_offset*data_alignment_factor. */
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                Dwarf_Unsigned lreg;
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, factored_N_value,
-                    dbg,error,final_instr_ptr);
-
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                /*  Do set ru_is_off here, as here factored_N_value
-                    counts.  */
-                localregtab[reg_no].ru_is_off = 1;
-                localregtab[reg_no].ru_register = reg_num_of_cfa;
-                localregtab[reg_no].ru_value_type = DW_EXPR_VAL_OFFSET;
-                localregtab[reg_no].ru_offset_or_block_len =
-                    factored_N_value * data_alignment_factor;
-
-                fp_offset = factored_N_value;
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                free(localregtab);
+                return adres;
             }
-        case DW_CFA_val_offset_sf:
-            {
-                /*  The first operand is an unsigned leb128 register
-                    number. The second is a factored signed offset.
-                    Makes the register be a val_offset(N) rule with N =
-                    factored_offset*data_alignment_factor. */
-                Dwarf_Unsigned lreg;
-
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-                DECODE_LEB128_SWORD_CK(instr_ptr, signed_factored_N_value,
-                    dbg,error,final_instr_ptr);
-                if (need_augmentation) {
-                    SIMPLE_ERROR_RETURN(DW_DLE_DF_NO_CIE_AUGMENTATION);
-                }
-                /*  Do set ru_is_off here, as here factored_N_value
-                    counts.  */
-                localregtab[reg_no].ru_is_off = 1;
-                localregtab[reg_no].ru_value_type = DW_EXPR_VAL_OFFSET;
-                localregtab[reg_no].ru_offset_or_block_len =
-                    signed_factored_N_value * data_alignment_factor;
-
-                fp_offset = signed_factored_N_value;
-
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                free(localregtab);
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            /*  Do set ru_is_off here, as here factored_N_value
+                counts.  */
+            localregtab[reg_no].ru_is_offset = 1;
+            localregtab[reg_no].ru_register = reg_num_of_cfa;
+            localregtab[reg_no].ru_value_type =
+                DW_EXPR_VAL_OFFSET;
+            localregtab[reg_no].ru_offset =
+                factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "rsd";
+                dfi->fi_u0 = lreg;
+                dfi->fi_s1 = signed_factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
             }
             break;
-        case DW_CFA_val_expression:
-            {
-                /*  The first operand is an unsigned leb128 register
-                    number. The second is a DW_FORM_block representing a
-                    DWARF expression. The rule for the register number
-                    becomes a val_expression(E) rule. */
-                Dwarf_Unsigned lreg = 0;
-                Dwarf_Unsigned block_len = 0;
+        }
+        case DW_CFA_val_offset_sf: {
+            /*  The first operand is an unsigned leb128 register
+                number. The second is a factored signed offset.
+                Makes the register be a val_offset(N) rule
+                with
+                N = factored_offset*data_alignment_factor. */
+            Dwarf_Unsigned lreg = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-                ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
-                DECODE_LEB128_UWORD_CK(instr_ptr, block_len,
-                    dbg,error,final_instr_ptr);
-                localregtab[lreg].ru_is_off = 0;        /* arbitrary */
-                localregtab[lreg].ru_value_type = DW_EXPR_VAL_EXPRESSION;
-                localregtab[lreg].ru_offset_or_block_len = block_len;
-                localregtab[lreg].ru_block = instr_ptr;
-                fp_offset = (Dwarf_Unsigned) instr_ptr;
-
-                instr_ptr += block_len;
-                fp_register = reg_no;
-
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_sword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &signed_factored_N_value,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            if (need_augmentation) {
+                SER(DW_DLE_DF_NO_CIE_AUGMENTATION);
+            }
+            /*  Do set ru_is_off here, as here factored_N_value
+                counts.  */
+            localregtab[reg_no].ru_is_offset = 1;
+            localregtab[reg_no].ru_value_type =
+                DW_EXPR_VAL_OFFSET;
+            localregtab[reg_no].ru_offset =
+                signed_factored_N_value * data_alignment_factor;
+            if (make_instr) {
+                dfi->fi_fields = "rsd";
+                dfi->fi_u0 = lreg;
+                dfi->fi_s1 = signed_factored_N_value;
+                dfi->fi_data_align_factor =
+                    data_alignment_factor;
+            }
             }
             break;
+        case DW_CFA_val_expression: {
+            /*  The first operand is an unsigned leb128 register
+                number. The second is a DW_FORM_block
+                representing a
+                DWARF expression. The rule for the register
+                number becomes a val_expression(E) rule. */
+            Dwarf_Unsigned lreg = 0;
+            Dwarf_Unsigned block_len = 0;
+            int adres = 0;
 
-            /* END DWARF3 new ops. */
-
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &lreg,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            reg_no = (reg_num_type) lreg;
+            ERROR_IF_REG_NUM_TOO_HIGH(reg_no, reg_count);
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &block_len,error);
+            if (adres != DW_DLV_OK) {
+                FREELOCALMALLOC;
+                return adres;
+            }
+            localregtab[lreg].ru_is_offset = 0; /* arbitrary */
+            localregtab[lreg].ru_value_type =
+                DW_EXPR_VAL_EXPRESSION;
+            localregtab[lreg].ru_offset = 0;
+            localregtab[lreg].ru_block.bl_data = instr_ptr;
+            localregtab[lreg].ru_block.bl_len = block_len;
+            if (make_instr) {
+                dfi->fi_fields = "rb";
+                dfi->fi_u0 = lreg;
+                dfi->fi_expr.bl_len = block_len;
+                dfi->fi_expr.bl_data = instr_ptr;
+            }
+            instr_ptr += block_len;
+            if (instr_area_length < block_len ||
+                instr_ptr < base_instr_ptr) {
+                SERSTRING(DW_DLE_DF_FRAME_DECODING_ERROR,
+                    "DW_DLE_DF_FRAME_DECODING_ERROR: "
+                    "DW_CFA_val_expression "
+                    "block len overflows instructions "
+                    "available range.");
+            }
+        }
+        break;
+        /* END DWARF3 new ops. */
 
 #ifdef DW_CFA_GNU_window_save
-        case DW_CFA_GNU_window_save:
-            {
-                /*  No information: this just tells unwinder to restore
-                    the window registers from the previous frame's
-                    window save area */
-                break;
+        case DW_CFA_GNU_window_save: {
+            /*  No information: this just tells
+                unwinder to restore
+                the window registers from the previous frame's
+                window save area */
+            if (make_instr) {
+                dfi->fi_fields = "";
             }
+        }
+        break;
 #endif
 #ifdef  DW_CFA_GNU_args_size
-            /*  Single uleb128 is the current arg area size in bytes. No
-                register exists yet to save this in */
-        case DW_CFA_GNU_args_size:
-            {
-                Dwarf_Unsigned lreg;
+            /*  Single uleb128 is the current arg area
+                size in bytes. No
+                register exists yet to save this in.
+                the value of must be added to
+                an x86 register to get the correct
+                stack pointer.
+                https://lists.nongnu.org/archive/html/
+                libunwind-devel/2016-12/msg00004.html
+                https://refspecs.linuxfoundation.org/
+                LSB_3.0.0/LSB-PDA/LSB-PDA.junk/dwarfext.html
+            */
+        case DW_CFA_GNU_args_size: {
+            Dwarf_Unsigned asize = 0;
+            int adres = 0;
 
-                DECODE_LEB128_UWORD_CK(instr_ptr, lreg,
-                    dbg,error,final_instr_ptr);
-                reg_no = (reg_num_type) lreg;
-
-                break;
+            adres = _dwarf_leb128_uword_wrapper(dbg,
+                &instr_ptr,final_instr_ptr,
+                &asize,error);
+            if (adres != DW_DLV_OK) {
+                free(localregtab);
+                return adres;
             }
+            /*  Currently not put into ru_* reg rules, not
+                sure what to do with it. */
+            /*  This is the total size of arguments
+                pushed on the stack.  */
+            if (make_instr) {
+                dfi->fi_fields = "u";
+                dfi->fi_u0 = asize;
+            }
+        }
+        break;
 #endif
-        default:
-            /*  ERROR, we have an opcode we know nothing about. Memory
-                leak here, but an error like this is not supposed to
-                happen so we ignore the leak. These used to be ignored,
+        default: {
+            /*  ERROR, we have an opcode we know nothing
+                about. Memory leak here, but an error
+                like this is not supposed to
+                happen so we ignore the leak.
+                These used to be ignored,
                 now we notice and report. */
-            SIMPLE_ERROR_RETURN(DW_DLE_DF_FRAME_DECODING_ERROR);
+            dwarfstring ms;
 
+            dwarfstring_constructor(&ms);
+            dwarfstring_append_printf_u(&ms,
+                "DW_DLE_DF_FRAME_DECODING_ERROR:  "
+                "instr opcode 0x%x unknown",opcode);
+            _dwarf_error_string(dbg,error,
+                DW_DLE_DF_FRAME_DECODING_ERROR,
+                dwarfstring_string(&ms));
+            dwarfstring_destructor(&ms);
+            FREELOCALMALLOC;
+            return DW_DLV_ERROR;
         }
-
+        }
         if (make_instr) {
+            /* add dfi to end of singly-linked list */
             instr_count++;
-
-            curr_instr = (Dwarf_Frame_Op *)
-                _dwarf_get_alloc(dbg, DW_DLA_FRAME_OP, 1);
-            if (curr_instr == NULL) {
-                SIMPLE_ERROR_RETURN(DW_DLE_DF_ALLOC_FAIL);
-            }
-
-            curr_instr->fp_base_op = fp_base_op;
-            curr_instr->fp_extended_op = fp_extended_op;
-            curr_instr->fp_register = fp_register;
-            curr_instr->fp_offset = fp_offset;
-            curr_instr->fp_instr_offset = fp_instr_offset;
-
-            curr_instr_item = (Dwarf_Chain)
-                _dwarf_get_alloc(dbg, DW_DLA_CHAIN, 1);
-            if (curr_instr_item == NULL) {
-                SIMPLE_ERROR_RETURN(DW_DLE_DF_ALLOC_FAIL);
-            }
-
-            curr_instr_item->ch_item = curr_instr;
-            if (head_instr_chain == NULL)
-                head_instr_chain = tail_instr_chain = curr_instr_item;
-            else {
-                tail_instr_chain->ch_next = curr_instr_item;
-                tail_instr_chain = curr_instr_item;
-            }
+            (*ilistlastptr) = dfi;
+            ilistlastptr = &dfi->fi_next;
         }
-    }
+    } /*  end for-loop on ops */
 
-    /*  If frame instruction decoding was right we would stop exactly at
+    /*  If frame instruction decoding was right we would
+        stop exactly at
         final_instr_ptr. */
     if (instr_ptr > final_instr_ptr) {
-        SIMPLE_ERROR_RETURN(DW_DLE_DF_FRAME_DECODING_ERROR);
+        SER(DW_DLE_DF_FRAME_DECODING_ERROR);
     }
     /*  If search_over is set the last instr was an advance_loc
         so we are not done with rows. */
@@ -1059,8 +1442,9 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
         }
     }
 
-    /* Fill in the actual output table, the space the caller passed in. */
-    if (table != NULL) {
+    /*  Fill in the actual output table, the space the
+        caller passed in. */
+    if (table) {
 
         struct Dwarf_Reg_Rule_s *t2reg = table->fr_reg;
         struct Dwarf_Reg_Rule_s *t3reg = localregtab;
@@ -1077,43 +1461,76 @@ _dwarf_exec_frame_instr(Dwarf_Bool make_instr,
             Just leave cfa_reg as cfa_reg. */
         table->fr_cfa_rule = cfa_reg;
     }
-
     /* Dealloc anything remaining on stack. */
     for (; top_stack != NULL;) {
         stack_table = top_stack;
         top_stack = top_stack->fr_next;
         dwarf_dealloc(dbg, stack_table, DW_DLA_FRAME);
     }
-
     if (make_instr) {
-        /*  Allocate array of Dwarf_Frame_Op structs.  */
-        head_instr_block = (Dwarf_Frame_Op *)
-            _dwarf_get_alloc(dbg, DW_DLA_FRAME_BLOCK, instr_count);
-        if (head_instr_block == NULL) {
-            SIMPLE_ERROR_RETURN(DW_DLE_DF_ALLOC_FAIL);
-        }
+        Dwarf_Frame_Instr_Head head = 0;
+        Dwarf_Frame_Instr *instrptrs   = 0;
+        Dwarf_Frame_Instr *curinstrptr = 0;
+        Dwarf_Frame_Instr cur         = 0;
+        Dwarf_Frame_Instr next        = 0;
+        Dwarf_Unsigned    ic          = 0;
 
-        /*  Store Dwarf_Frame_Op instances in this array and
-            deallocate the structs that chain the Dwarf_Frame_Op's. */
-        curr_instr_item = head_instr_chain;
-        for (i = 0; i < instr_count; i++) {
-            *(head_instr_block + i) =
-                *(Dwarf_Frame_Op *) curr_instr_item->ch_item;
-            dealloc_instr_item = curr_instr_item;
-            curr_instr_item = curr_instr_item->ch_next;
-            dwarf_dealloc(dbg, dealloc_instr_item->ch_item,
-                DW_DLA_FRAME_OP);
-            dwarf_dealloc(dbg, dealloc_instr_item, DW_DLA_CHAIN);
+        head= (Dwarf_Frame_Instr_Head)
+            _dwarf_get_alloc(dbg, DW_DLA_FRAME_INSTR_HEAD,1);
+        if (!head) {
+            SER(DW_DLE_DF_ALLOC_FAIL);
         }
-        *ret_frame_instr = head_instr_block;
-        *returned_count = (Dwarf_Sword) instr_count;
+        instrptrs= (Dwarf_Frame_Instr *)
+            _dwarf_get_alloc(dbg, DW_DLA_LIST,instr_count);
+        if (!instrptrs) {
+            dwarf_dealloc(dbg,head,DW_DLA_FRAME_INSTR_HEAD);
+            SER(DW_DLE_DF_ALLOC_FAIL);
+        }
+        head->fh_array = instrptrs;
+        head->fh_array_count = instr_count;
+        head->fh_dbg = dbg;
+        head->fh_cie = cie;
+        cur = ilisthead;
+        curinstrptr = instrptrs;
+        for ( ; cur ; ic++,cur = next,++curinstrptr) {
+            *curinstrptr = cur;
+            next = cur->fi_next;
+            cur->fi_next = 0;
+        }
+        ilisthead = 0;
+        if (ic != instr_count) {
+            dwarfstring m;
+
+            FREELOCALMALLOC;
+            dwarf_dealloc(dbg,head,DW_DLA_FRAME_INSTR_HEAD);
+            dwarfstring_constructor(&m);
+            dwarfstring_append_printf_u(&m,
+                "DW_DLE_DF_FRAME_DECODING_ERROR: "
+                "Instruction array build, instr count %u",
+                instr_count);
+            dwarfstring_append_printf_u(&m,
+                " index i %u. Impossible error.",ic);
+            _dwarf_error_string(dbg,error,
+                DW_DLE_DF_FRAME_DECODING_ERROR,
+                dwarfstring_string(&m));
+            dwarfstring_destructor(&m);
+            return DW_DLV_ERROR;
+        }
+        *ret_frame_instr_head = head;
+        *returned_frame_instr_count =  instr_count;
     } else {
-        *returned_count = 0;
+        if (ret_frame_instr_head) {
+            *ret_frame_instr_head = 0;
+        }
+        if (returned_frame_instr_count) {
+            *returned_frame_instr_count = 0;
+        }
     }
     free(localregtab);
     return DW_DLV_OK;
 #undef ERROR_IF_REG_NUM_TOO_HIGH
-#undef SIMPLE_ERROR_RETURN
+#undef FREELOCALMALLOC
+#undef SER
 }
 
 /*  Depending on version, either read the return address register
@@ -1130,7 +1547,7 @@ _dwarf_get_return_address_reg(Dwarf_Small *frame_ptr,
     Dwarf_Error *error)
 {
     Dwarf_Unsigned uvalue = 0;
-    Dwarf_Word leb128_length = 0;
+    Dwarf_Unsigned leb128_length = 0;
 
     if (version == 1) {
         if (frame_ptr >= section_end) {
@@ -1149,7 +1566,6 @@ _dwarf_get_return_address_reg(Dwarf_Small *frame_ptr,
     return DW_DLV_OK;
 }
 
-
 /* Trivial consumer function.
 */
 int
@@ -1158,7 +1574,7 @@ dwarf_get_cie_of_fde(Dwarf_Fde fde,
 {
     if (fde == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     *cie_returned = fde->fd_cie;
@@ -1174,11 +1590,11 @@ int dwarf_get_cie_index(
     if (cie == NULL)
     {
         _dwarf_error(NULL, error, DW_DLE_CIE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     *indx = cie->ci_index;
-    return (DW_DLV_OK);
+    return DW_DLV_OK;
 }
 
 /*  For g++ .eh_frame fde and cie.
@@ -1199,7 +1615,8 @@ dwarf_get_fde_list_eh(Dwarf_Debug dbg,
     Dwarf_Signed * fde_element_count,
     Dwarf_Error * error)
 {
-    int res = _dwarf_load_section(dbg, &dbg->de_debug_frame_eh_gnu,error);
+    int res = _dwarf_load_section(dbg,
+        &dbg->de_debug_frame_eh_gnu,error);
     if (res != DW_DLV_OK) {
         return res;
     }
@@ -1217,8 +1634,6 @@ dwarf_get_fde_list_eh(Dwarf_Debug dbg,
         error);
     return res;
 }
-
-
 
 /*  For standard dwarf .debug_frame
     cie_id is -1  in a cie, and
@@ -1248,10 +1663,8 @@ dwarf_get_fde_list(Dwarf_Debug dbg,
         DW_CIE_ID,
         /* use_gnu_cie_calc= */ 0,
         error);
-
     return res;
 }
-
 
 /*  Only works on dwarf sections, not eh_frame
     because based on DW_AT_MIPS_fde.
@@ -1285,7 +1698,7 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
 
     if (die == NULL) {
         _dwarf_error(NULL, error, DW_DLE_DIE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     resattr = dwarf_attr(die, DW_AT_MIPS_fde, &attr, error);
@@ -1296,8 +1709,10 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
     /* why is this formsdata? FIX */
     sdatares = dwarf_formsdata(attr, &signdval, error);
     if (sdatares != DW_DLV_OK) {
+        dwarf_dealloc_attribute(attr);
         return sdatares;
     }
+    dwarf_dealloc_attribute(attr);
 
     res = _dwarf_load_section(dbg, &dbg->de_debug_frame,error);
     if (res != DW_DLV_OK) {
@@ -1309,12 +1724,11 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
     fde_ptr = fde_start_ptr + fde_offset;
     fde_end_ptr = fde_start_ptr + dbg->de_debug_frame.dss_size;
 
-
-    /*  First read in the 'common prefix' to figure out what * we are to
-        do with this entry. */
+    /*  First read in the 'common prefix' to figure out
+        what we are to do with this entry. */
     memset(&prefix_c, 0, sizeof(prefix_c));
     memset(&prefix, 0, sizeof(prefix));
-    res = dwarf_read_cie_fde_prefix(dbg, fde_ptr,
+    res = _dwarf_read_cie_fde_prefix(dbg, fde_ptr,
         dbg->de_debug_frame.dss_data,
         dbg->de_debug_frame.dss_index,
         dbg->de_debug_frame.dss_size,
@@ -1323,13 +1737,14 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
     if (res == DW_DLV_ERROR) {
         return res;
     }
-    if (res == DW_DLV_NO_ENTRY)
+    if (res == DW_DLV_NO_ENTRY) {
         return res;
+    }
     fde_ptr = prefix.cf_addr_after_prefix;
     cie_id = prefix.cf_cie_id;
     /*  Pass NULL, not section pointer, for 3rd argument.
         de_debug_frame.dss_data has no eh_frame relevance. */
-    res = dwarf_create_fde_from_after_start(dbg, &prefix,
+    res = _dwarf_create_fde_from_after_start(dbg, &prefix,
         fde_start_ptr,
         fde_ptr,
         fde_end_ptr,
@@ -1345,16 +1760,21 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
 
     /* now read the cie corresponding to the fde */
     cie_ptr = new_fde->fd_section_ptr + cie_id;
-    res = dwarf_read_cie_fde_prefix(dbg, cie_ptr,
+    res = _dwarf_read_cie_fde_prefix(dbg, cie_ptr,
         dbg->de_debug_frame.dss_data,
         dbg->de_debug_frame.dss_index,
         dbg->de_debug_frame.dss_size,
         &prefix_c, error);
     if (res == DW_DLV_ERROR) {
+        dwarf_dealloc(dbg,new_fde,DW_DLA_FDE);
+        new_fde = 0;
         return res;
     }
-    if (res == DW_DLV_NO_ENTRY)
+    if (res == DW_DLV_NO_ENTRY) {
+        dwarf_dealloc(dbg,new_fde,DW_DLA_FDE);
+        new_fde = 0;
         return res;
+    }
 
     cie_ptr = prefix_c.cf_addr_after_prefix;
     cie_id = prefix_c.cf_cie_id;
@@ -1365,7 +1785,7 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
 
         /*  Pass NULL, not section pointer, for 3rd argument.
             de_debug_frame.dss_data has no eh_frame relevance. */
-        res2 = dwarf_create_cie_from_after_start(dbg,
+        res2 = _dwarf_create_cie_from_after_start(dbg,
             &prefix_c,
             fde_start_ptr,
             cie_ptr,
@@ -1382,21 +1802,22 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,
         }
         new_fde->fd_cie = new_cie;
     } else {
+        dwarf_dealloc(dbg,new_fde,DW_DLA_FDE);
+        new_fde = 0;
         _dwarf_error(dbg, error, DW_DLE_NO_CIE_FOR_FDE);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
     *ret_fde = new_fde;
     return DW_DLV_OK;
 }
 
-/* A dwarf consumer operation, see the consumer library documentation.
-*/
+/* A dwarf consumer operation, see the consumer
+    library documentation.  */
 int
 dwarf_get_fde_range(Dwarf_Fde fde,
     Dwarf_Addr * low_pc,
     Dwarf_Unsigned * func_length,
-    Dwarf_Ptr * fde_bytes,
+    Dwarf_Byte_Ptr * fde_bytes,
     Dwarf_Unsigned * fde_byte_length,
     Dwarf_Off * cie_offset,
     Dwarf_Signed * cie_index,
@@ -1406,21 +1827,18 @@ dwarf_get_fde_range(Dwarf_Fde fde,
 
     if (fde == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     dbg = fde->fd_dbg;
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
-
-    /*  We have always already done the section load here, so no need to
-        load the section. We did the section load in order to create the
+    /*  We have always already done the section load here,
+        so no need to load the section. We did the section
+        load in order to create the
         Dwarf_Fde pointer passed in here. */
-
-
     if (low_pc != NULL)
         *low_pc = fde->fd_initial_location;
     if (func_length != NULL)
@@ -1453,14 +1871,12 @@ dwarf_get_fde_exception_info(Dwarf_Fde fde,
     dbg = fde->fd_dbg;
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     *offset_into_exception_tables =
         fde->fd_offset_into_exception_tables;
     return DW_DLV_OK;
 }
-
-
 
 /*  A consumer code function.
     Given a CIE pointer, return the normal CIE data thru
@@ -1468,56 +1884,29 @@ dwarf_get_fde_exception_info(Dwarf_Fde fde,
     Special augmentation data is not returned here.
 */
 int
-dwarf_get_cie_info(Dwarf_Cie cie,
-    Dwarf_Unsigned * bytes_in_cie,
-    Dwarf_Small * ptr_to_version,
-    char **augmenter,
-    Dwarf_Unsigned * code_alignment_factor,
-    Dwarf_Signed * data_alignment_factor,
-    Dwarf_Half * return_address_register,
-    Dwarf_Ptr * initial_instructions,
-    Dwarf_Unsigned * initial_instructions_length,
-    Dwarf_Error * error)
-{
-    Dwarf_Half offset_size = 0;
-    return dwarf_get_cie_info_b(cie,
-        bytes_in_cie,
-        ptr_to_version,
-        augmenter,
-        code_alignment_factor,
-        data_alignment_factor,
-        return_address_register,
-        initial_instructions,
-        initial_instructions_length,
-        &offset_size,
-        error);
-}
-int
 dwarf_get_cie_info_b(Dwarf_Cie cie,
-    Dwarf_Unsigned * bytes_in_cie,
-    Dwarf_Small * ptr_to_version,
-    char **augmenter,
-    Dwarf_Unsigned * code_alignment_factor,
-    Dwarf_Signed * data_alignment_factor,
-    Dwarf_Half * return_address_register,
-    Dwarf_Ptr * initial_instructions,
-    Dwarf_Unsigned * initial_instructions_length,
-    Dwarf_Half * offset_size,
-    Dwarf_Error * error)
+    Dwarf_Unsigned *bytes_in_cie,
+    Dwarf_Small    *ptr_to_version,
+    char          **augmenter,
+    Dwarf_Unsigned *code_alignment_factor,
+    Dwarf_Signed   *data_alignment_factor,
+    Dwarf_Half     *return_address_register,
+    Dwarf_Byte_Ptr      *initial_instructions,
+    Dwarf_Unsigned *initial_instructions_length,
+    Dwarf_Half     *offset_size,
+    Dwarf_Error    *error)
 {
     Dwarf_Debug dbg = 0;
 
     if (cie == NULL) {
         _dwarf_error(NULL, error, DW_DLE_CIE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
     dbg = cie->ci_dbg;
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_CIE_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
     if (ptr_to_version != NULL)
         *ptr_to_version = cie->ci_cie_version_number;
     if (augmenter != NULL)
@@ -1540,7 +1929,7 @@ dwarf_get_cie_info_b(Dwarf_Cie cie,
         *offset_size = cie->ci_length_size;
     }
     *bytes_in_cie = (cie->ci_length);
-    return (DW_DLV_OK);
+    return DW_DLV_OK;
 }
 
 /* Return the register rules for all registers at a given pc.
@@ -1556,7 +1945,6 @@ _dwarf_get_fde_info_for_a_pc_row(Dwarf_Fde fde,
 {
     Dwarf_Debug dbg = 0;
     Dwarf_Cie cie = 0;
-    Dwarf_Sword icount = 0;
     int res = 0;
 
     if (fde == NULL) {
@@ -1585,30 +1973,33 @@ _dwarf_get_fde_info_for_a_pc_row(Dwarf_Fde fde,
             cie->ci_extension_size -
             (cie->ci_cie_instr_start -
             cie->ci_cie_start);
-
         if (instrend > cie->ci_cie_end) {
             _dwarf_error(dbg, error,DW_DLE_CIE_INSTR_PTR_ERROR);
             return DW_DLV_ERROR;
         }
-        cie->ci_initial_table = (Dwarf_Frame)_dwarf_get_alloc(dbg, DW_DLA_FRAME, 1);
+        cie->ci_initial_table = (Dwarf_Frame)_dwarf_get_alloc(dbg,
+            DW_DLA_FRAME, 1);
 
         if (cie->ci_initial_table == NULL) {
             _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
             return DW_DLV_ERROR;
         }
         dwarf_init_reg_rules_ru(cie->ci_initial_table->fr_reg,
-            0, cie->ci_initial_table->fr_reg_count,dbg->de_frame_rule_initial_value);
+            0, cie->ci_initial_table->fr_reg_count,
+            dbg->de_frame_rule_initial_value);
         dwarf_init_reg_rules_ru(&cie->ci_initial_table->fr_cfa_rule,
             0,1,dbg->de_frame_rule_initial_value);
         res = _dwarf_exec_frame_instr( /* make_instr= */ false,
-            /* ret_frame_instr= */ NULL,
             /* search_pc */ false,
             /* search_pc_val */ 0,
             /* location */ 0,
             instrstart,
             instrend,
-            cie->ci_initial_table, cie, dbg,
-            cfa_reg_col_num, &icount,
+            cie->ci_initial_table,
+            cie, dbg,
+            cfa_reg_col_num,
+            has_more_rows,
+            subsequent_pc,
             NULL,NULL,
             error);
         if (res != DW_DLV_OK) {
@@ -1617,28 +2008,26 @@ _dwarf_get_fde_info_for_a_pc_row(Dwarf_Fde fde,
     }
 
     {
-        Dwarf_Small *instr_end = fde->fd_fde_instr_start +
-            fde->fd_length +
+        Dwarf_Small *instr_end = fde->fd_length +
             fde->fd_length_size +
-            fde->fd_extension_size - (fde->fd_fde_instr_start -
-                fde->fd_fde_start);
+            fde->fd_extension_size + fde->fd_fde_start;
         if (instr_end > fde->fd_fde_end) {
             _dwarf_error(dbg, error,DW_DLE_FDE_INSTR_PTR_ERROR);
             return DW_DLV_ERROR;
         }
 
         res = _dwarf_exec_frame_instr( /* make_instr= */ false,
-            /* ret_frame_instr= */ NULL,
             /* search_pc */ true,
             /* search_pc_val */ pc_requested,
             fde->fd_initial_location,
             fde->fd_fde_instr_start,
             instr_end,
             table,
-            cie, dbg,
-            cfa_reg_col_num, &icount,
+            cie,dbg,
+            cfa_reg_col_num,
             has_more_rows,
             subsequent_pc,
+            NULL,NULL,
             error);
     }
     if (res != DW_DLV_OK) {
@@ -1666,75 +2055,7 @@ _dwarf_get_fde_info_for_a_pc_row(Dwarf_Fde fde,
 
     It is much better to use dwarf_get_fde_info_for_all_regs3()
     instead of this interface.
-*/
-int
-dwarf_get_fde_info_for_all_regs(Dwarf_Fde fde,
-    Dwarf_Addr pc_requested,
-    Dwarf_Regtable * reg_table,
-    Dwarf_Addr * row_pc,
-    Dwarf_Error * error)
-{
-
-    /* Table size: DW_REG_TABLE_SIZE */
-    struct Dwarf_Frame_s fde_table;
-    Dwarf_Sword i = 0;
-    struct Dwarf_Reg_Rule_s *rule = NULL;
-    struct Dwarf_Regtable_Entry_s *out_rule = NULL;
-    int res = 0;
-    Dwarf_Debug dbg = 0;
-
-    /* For this interface the size is fixed at compile time. */
-    int output_table_real_data_size = DW_REG_TABLE_SIZE;
-
-    FDE_NULL_CHECKS_AND_SET_DBG(fde, dbg);
-
-    res = dwarf_initialize_fde_table(dbg, &fde_table,
-        output_table_real_data_size,
-        error);
-    if (res != DW_DLV_OK)
-        return res;
-
-    /* _dwarf_get_fde_info_for_a_pc_row will perform more sanity checks
-    */
-    res = _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested,
-        &fde_table, dbg->de_frame_cfa_col_number,NULL,NULL, error);
-    if (res != DW_DLV_OK) {
-        dwarf_free_fde_table(&fde_table);
-        return res;
-    }
-
-    out_rule = &reg_table->rules[0];
-    rule = &fde_table.fr_reg[0];
-    for (i = 0; i < output_table_real_data_size;
-        i++, ++out_rule, ++rule) {
-        out_rule->dw_offset_relevant = rule->ru_is_off;
-        out_rule->dw_value_type = rule->ru_value_type;
-        out_rule->dw_regnum = rule->ru_register;
-        out_rule->dw_offset = rule->ru_offset_or_block_len;
-    }
-    dwarf_init_reg_rules_dw(&reg_table->rules[0],i,DW_REG_TABLE_SIZE,
-        dbg->de_frame_undefined_value_number);
-
-    /*  The test is just in case it's not inside the table. For non-MIPS
-        it could be outside the table and that is just fine, it was
-        really a mistake to put it in the table in 1993.  */
-    /* CONSTCOND */
-    if (dbg->de_frame_cfa_col_number < DW_REG_TABLE_SIZE) {
-        out_rule = &reg_table->rules[dbg->de_frame_cfa_col_number];
-        out_rule->dw_offset_relevant = fde_table.fr_cfa_rule.ru_is_off;
-        out_rule->dw_value_type = fde_table.fr_cfa_rule.ru_value_type;
-        out_rule->dw_regnum = fde_table.fr_cfa_rule.ru_register;
-        out_rule->dw_offset =
-            fde_table.fr_cfa_rule.ru_offset_or_block_len;
-    }
-
-    if (row_pc != NULL)
-        *row_pc = fde_table.fr_loc;
-    dwarf_free_fde_table(&fde_table);
-    return DW_DLV_OK;
-}
-
-/*  A consumer call for efficiently getting the register info
+    A consumer call for efficiently getting the register info
     for all registers in one call.
 
     The output table rules array is size output_table_real_data_size.
@@ -1750,7 +2071,7 @@ dwarf_get_fde_info_for_all_regs3(Dwarf_Fde fde,
 {
 
     struct Dwarf_Frame_s fde_table;
-    Dwarf_Sword i = 0;
+    Dwarf_Signed i = 0;
     int res = 0;
     struct Dwarf_Reg_Rule_s *rule = NULL;
     struct Dwarf_Regtable_Entry3_s *out_rule = NULL;
@@ -1766,9 +2087,12 @@ dwarf_get_fde_info_for_all_regs3(Dwarf_Fde fde,
     res = dwarf_initialize_fde_table(dbg, &fde_table,
         output_table_real_data_size,
         error);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
 
-    /* _dwarf_get_fde_info_for_a_pc_row will perform more sanity checks
-    */
+    /*  _dwarf_get_fde_info_for_a_pc_row will perform
+        more sanity checks */
     res = _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested,
         &fde_table,
         dbg->de_frame_cfa_col_number,
@@ -1783,25 +2107,28 @@ dwarf_get_fde_info_for_all_regs3(Dwarf_Fde fde,
     rule = &fde_table.fr_reg[0];
     for (i = 0; i < output_table_real_data_size;
         i++, ++out_rule, ++rule) {
-        out_rule->dw_offset_relevant = rule->ru_is_off;
+        out_rule->dw_offset_relevant = rule->ru_is_offset;
+        out_rule->dw_args_size = rule->ru_args_size;
         out_rule->dw_value_type = rule->ru_value_type;
         out_rule->dw_regnum = rule->ru_register;
-        out_rule->dw_offset_or_block_len = rule->ru_offset_or_block_len;
-        out_rule->dw_block_ptr = rule->ru_block;
+        out_rule->dw_offset= rule->ru_offset;
+        out_rule->dw_block = rule->ru_block;
     }
-    dwarf_init_reg_rules_dw3(&reg_table->rt3_rules[0],i,reg_table->rt3_reg_table_size,
+    dwarf_init_reg_rules_dw3(&reg_table->rt3_rules[0],i,
+        reg_table->rt3_reg_table_size,
         dbg->de_frame_undefined_value_number);
-
     reg_table->rt3_cfa_rule.dw_offset_relevant =
-        fde_table.fr_cfa_rule.ru_is_off;
+        fde_table.fr_cfa_rule.ru_is_offset;
     reg_table->rt3_cfa_rule.dw_value_type =
         fde_table.fr_cfa_rule.ru_value_type;
     reg_table->rt3_cfa_rule.dw_regnum =
         fde_table.fr_cfa_rule.ru_register;
-    reg_table->rt3_cfa_rule.dw_offset_or_block_len =
-        fde_table.fr_cfa_rule.ru_offset_or_block_len;
-    reg_table->rt3_cfa_rule.dw_block_ptr =
+    reg_table->rt3_cfa_rule.dw_offset =
+        fde_table.fr_cfa_rule.ru_offset;
+    reg_table->rt3_cfa_rule.dw_block =
         fde_table.fr_cfa_rule.ru_block;
+    reg_table->rt3_cfa_rule.dw_args_size =
+        fde_table.fr_cfa_rule.ru_args_size;
 
     if (row_pc != NULL)
         *row_pc = fde_table.fr_loc;
@@ -1810,121 +2137,13 @@ dwarf_get_fde_info_for_all_regs3(Dwarf_Fde fde,
     return DW_DLV_OK;
 }
 
-/*  Obsolete as of 2006.
-    Gets the register info for a single register at a given PC value
-    for the FDE specified.
-
-    This is the old MIPS interface and should no longer be used.
-    Use dwarf_get_fde_info_for_reg3() instead.
-    It can not handle DWARF3 or later properly as it
-    assumes the CFA is representable as a table column. */
-int
-dwarf_get_fde_info_for_reg(Dwarf_Fde fde,
-    Dwarf_Half table_column,
-    Dwarf_Addr pc_requested,
-    Dwarf_Signed * offset_relevant,
-    Dwarf_Signed * register_num,
-    Dwarf_Signed * offset,
-    Dwarf_Addr * row_pc, Dwarf_Error * error)
-{
-    struct Dwarf_Frame_s fde_table;
-    int res = DW_DLV_ERROR;
-    Dwarf_Debug dbg = 0;
-    int output_table_real_data_size = 0;
-
-    FDE_NULL_CHECKS_AND_SET_DBG(fde, dbg);
-    output_table_real_data_size = dbg->de_frame_reg_rules_entry_count;
-
-    res = dwarf_initialize_fde_table(dbg, &fde_table,
-        output_table_real_data_size,
-        error);
-    if (res != DW_DLV_OK)
-        return res;
-
-    if (table_column >= output_table_real_data_size) {
-        dwarf_free_fde_table(&fde_table);
-        _dwarf_error(dbg, error, DW_DLE_FRAME_TABLE_COL_BAD);
-        return (DW_DLV_ERROR);
-    }
-
-    /* _dwarf_get_fde_info_for_a_pc_row will perform more sanity checks
-    */
-    res =
-        _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested, &fde_table,
-            dbg->de_frame_cfa_col_number,
-            NULL,NULL,error);
-    if (res != DW_DLV_OK) {
-        dwarf_free_fde_table(&fde_table);
-        return res;
-    }
-
-    if (fde_table.fr_reg[table_column].ru_value_type != DW_EXPR_OFFSET) {
-        /*  The problem here is that this interface cannot deal with
-            other sorts of (newer) dwarf frame values.  Code must
-            use dwarf_get_fde_info_for_reg3() to get these
-            values correctly.  We error rather than return
-            misleading incomplete data. */
-        dwarf_free_fde_table(&fde_table);
-        _dwarf_error(NULL, error,
-            DW_DLE_FRAME_REGISTER_UNREPRESENTABLE);
-        return (DW_DLV_ERROR);
-    }
-    if (table_column == dbg->de_frame_cfa_col_number) {
-        if (register_num != NULL)
-            *register_num = fde_table.fr_cfa_rule.ru_register;
-        if (offset != NULL)
-            *offset = fde_table.fr_cfa_rule.ru_offset_or_block_len;
-        if (row_pc != NULL)
-            *row_pc = fde_table.fr_loc;
-        *offset_relevant = fde_table.fr_cfa_rule.ru_is_off;
-
-    } else {
-        if (register_num != NULL)
-            *register_num = fde_table.fr_reg[table_column].ru_register;
-        if (offset != NULL)
-            *offset = fde_table.fr_reg[table_column].ru_offset_or_block_len;
-        if (row_pc != NULL)
-            *row_pc = fde_table.fr_loc;
-
-        *offset_relevant = fde_table.fr_reg[table_column].ru_is_off;
-    }
-    dwarf_free_fde_table(&fde_table);
-    return DW_DLV_OK;
-}
-
 /*  In this interface, table_column of DW_FRAME_CFA_COL
     is not meaningful.
-    Use  dwarf_get_fde_info_for_cfa_reg3() to get the CFA.
+    Use  dwarf_get_fde_info_for_cfa_reg3_b() to get the CFA.
     Call dwarf_set_frame_cfa_value() to set the correct column
     after calling dwarf_init()
     (DW_FRAME_CFA_COL3 is a sensible column to use).
 */
-int
-dwarf_get_fde_info_for_reg3(Dwarf_Fde fde,
-    Dwarf_Half table_column,
-    Dwarf_Addr pc_requested,
-    Dwarf_Small * value_type,
-    Dwarf_Signed * offset_relevant,
-    Dwarf_Signed * register_num,
-    Dwarf_Signed * offset_or_block_len,
-    Dwarf_Ptr * block_ptr,
-    Dwarf_Addr * row_pc_out,
-    Dwarf_Error * error)
-{
-    int res = dwarf_get_fde_info_for_reg3_b(fde,
-        table_column, pc_requested, value_type,
-        offset_relevant, register_num,
-        offset_or_block_len,
-        block_ptr,
-        row_pc_out,
-        /*  Not looking for the has_more_rows flag
-            nor for the next pc in the frame data. */
-        NULL,NULL,
-        error);
-    return res;
-}
-
-
 /*  New May 2018.
     If one is tracking the value of a single table
     column through a function, this lets us
@@ -1944,10 +2163,10 @@ dwarf_get_fde_info_for_reg3_b(Dwarf_Fde fde,
     Dwarf_Half table_column,
     Dwarf_Addr pc_requested,
     Dwarf_Small * value_type,
-    Dwarf_Signed * offset_relevant,
-    Dwarf_Signed * register_num,
-    Dwarf_Signed * offset_or_block_len,
-    Dwarf_Ptr * block_ptr,
+    Dwarf_Unsigned * offset_relevant,
+    Dwarf_Unsigned * register_num,
+    Dwarf_Unsigned * offset,
+    Dwarf_Block * block,
     Dwarf_Addr * row_pc_out,
     Dwarf_Bool * has_more_rows,
     Dwarf_Addr * subsequent_pc,
@@ -1962,7 +2181,8 @@ dwarf_get_fde_info_for_reg3_b(Dwarf_Fde fde,
     FDE_NULL_CHECKS_AND_SET_DBG(fde, dbg);
 
     if (!fde->fd_have_fde_tab  ||
-    /*  The test is just in case it's not inside the table. For non-MIPS
+    /*  The test is just in case it's not inside the table.
+        For non-MIPS
         it could be outside the table and that is just fine, it was
         really a mistake to put it in the table in 1993.  */
         fde->fd_fde_pc_requested != pc_requested) {
@@ -1980,12 +2200,13 @@ dwarf_get_fde_info_for_reg3_b(Dwarf_Fde fde,
             dwarf_free_fde_table(fde_table);
             fde->fd_have_fde_tab = false;
             _dwarf_error(dbg, error, DW_DLE_FRAME_TABLE_COL_BAD);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
 
-        /*  _dwarf_get_fde_info_for_a_pc_row will perform more sanity checks
-        */
-        res = _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested, fde_table,
+        /*  _dwarf_get_fde_info_for_a_pc_row will perform
+            more sanity checks */
+        res = _dwarf_get_fde_info_for_a_pc_row(fde,
+            pc_requested, fde_table,
             dbg->de_frame_cfa_col_number,
             has_more_rows,subsequent_pc,
             error);
@@ -1996,98 +2217,47 @@ dwarf_get_fde_info_for_reg3_b(Dwarf_Fde fde,
         }
     }
 
-    if (register_num != NULL) {
+    if (register_num) {
         *register_num = fde_table->fr_reg[table_column].ru_register;
     }
-    if (offset_or_block_len != NULL) {
-        *offset_or_block_len =
-            fde_table->fr_reg[table_column].ru_offset_or_block_len;
+    if (offset) {
+        *offset = fde_table->fr_reg[table_column].ru_offset;
     }
     if (row_pc_out != NULL) {
         *row_pc_out = fde_table->fr_loc;
     }
-    if (block_ptr) {
-        *block_ptr = fde_table->fr_reg[table_column].ru_block;
+    if (block) {
+        *block = fde_table->fr_reg[table_column].ru_block;
     }
 
-    /*  Without value_type the data cannot be understood, so we insist
-        on it being present, we don't test it. */
+    /*  Without value_type the data cannot be understood,
+        so we insist on it being present, we don't test it. */
     *value_type = fde_table->fr_reg[table_column].ru_value_type;
-    *offset_relevant = (fde_table->fr_reg[table_column].ru_is_off);
+    *offset_relevant = (fde_table->fr_reg[table_column].ru_is_offset);
     fde->fd_have_fde_tab = true;
     fde->fd_fde_pc_requested = pc_requested;
     return DW_DLV_OK;
 
 }
 
-/*  New 2006.
-    For current DWARF, this is a preferred interface.
-
-    Compared to dwarf_get_fde_info_for_reg()
-    it more correctly deals with the  CFA by not
+/*
+    This deals with the  CFA by not
     making the CFA a column number, which means
-    DW_FRAME_CFA_COL3 becomes, like DW_CFA_SAME_VALUE,
-    a special value, not something one uses as an index.
-
-    See also dwarf_get_fde_info_for_cfa_reg3_b(), which
-    is slightly preferred.
-    */
-int
-dwarf_get_fde_info_for_cfa_reg3(Dwarf_Fde fde,
-    Dwarf_Addr pc_requested,
-    Dwarf_Small * value_type,
-    Dwarf_Signed * offset_relevant,
-    Dwarf_Signed * register_num,
-    Dwarf_Signed * offset_or_block_len,
-    Dwarf_Ptr * block_ptr,
-    Dwarf_Addr * row_pc_out,
-    Dwarf_Error * error)
-{
-    Dwarf_Bool has_more_rows = 0;
-    Dwarf_Addr next_pc = 0;
-    int res = 0;
-    res = dwarf_get_fde_info_for_cfa_reg3_b(fde,
-        pc_requested,
-        value_type,
-        offset_relevant,
-        register_num,
-        offset_or_block_len,
-        block_ptr,
-        row_pc_out,
-        &has_more_rows,
-        &next_pc,
-        error);
-    return res;
-}
-
-/*  New June 11,2016.
-    For current DWARF, this is a preferred interface.
-
-    Has extra arguments has_more_rows and next_pc
-    (compared to dwarf_get_fde_info_for_cfa_reg3())
-    which can be used to more efficiently traverse
-    frame data (primarily for dwarfdump and like
-    programs).
-
-    Like dwarf_get_fde_info_for_cfa_reg3() it
-    deals with the  CFA by not
-    making the CFA a column number, which means
-    DW_FRAME_CFA_COL3 becomes, like DW_CFA_SAME_VALUE,
+    DW_FRAME_CFA_COL3 is, like DW_CFA_SAME_VALUE,
     a special value, not something one uses as an index.
 
     Call dwarf_set_frame_cfa_value() to set the correct column
-    after calling dwarf_init()
-    (DW_FRAME_CFA_COL3 is a sensible column to use, and
-    is the default unless '--enable-oldframecol'
-    is used to configure libdwarf).  */
+    after calling dwarf_init().
+    DW_FRAME_CFA_COL3 is a sensible column to use.
+*/
 int
 dwarf_get_fde_info_for_cfa_reg3_b(Dwarf_Fde fde,
     Dwarf_Addr pc_requested,
     Dwarf_Small * value_type,
-    Dwarf_Signed * offset_relevant,
-    Dwarf_Signed * register_num,
-    Dwarf_Signed * offset_or_block_len,
-    Dwarf_Ptr * block_ptr,
+    Dwarf_Unsigned * offset_relevant,
+    Dwarf_Unsigned * register_num,
+    Dwarf_Unsigned * offset,
+    Dwarf_Block * block,
     Dwarf_Addr * row_pc_out,
     Dwarf_Bool * has_more_rows,
     Dwarf_Addr * subsequent_pc,
@@ -2106,63 +2276,59 @@ dwarf_get_fde_info_for_cfa_reg3_b(Dwarf_Fde fde,
         table_real_data_size, error);
     if (res != DW_DLV_OK)
         return res;
-    res = _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested, &fde_table,
-        dbg->de_frame_cfa_col_number,has_more_rows,subsequent_pc,error);
+    res = _dwarf_get_fde_info_for_a_pc_row(fde, pc_requested,
+        &fde_table,
+        dbg->de_frame_cfa_col_number,has_more_rows,
+        subsequent_pc,error);
     if (res != DW_DLV_OK) {
         dwarf_free_fde_table(&fde_table);
         return res;
     }
-
-    if (register_num != NULL)
+    if (register_num) {
         *register_num = fde_table.fr_cfa_rule.ru_register;
-    if (offset_or_block_len != NULL)
-        *offset_or_block_len =
-            fde_table.fr_cfa_rule.ru_offset_or_block_len;
+    }
+    if (offset) {
+        *offset = fde_table.fr_cfa_rule.ru_offset;
+    }
     if (row_pc_out != NULL) {
         *row_pc_out = fde_table.fr_loc;
     }
-    if (block_ptr) {
-        *block_ptr = fde_table.fr_cfa_rule.ru_block;
+    if (block) {
+        *block = fde_table.fr_cfa_rule.ru_block;
     }
-
-    /*  Without value_type the data cannot be understood, so we insist
+    /*  Without value_type the data cannot be
+        understood, so we insist
         on it being present, we don't test it. */
     *value_type = fde_table.fr_cfa_rule.ru_value_type;
-    *offset_relevant = fde_table.fr_cfa_rule.ru_is_off;
+    *offset_relevant = fde_table.fr_cfa_rule.ru_is_offset;
     dwarf_free_fde_table(&fde_table);
     return DW_DLV_OK;
 }
 
-
-
 /*  Return pointer to the instructions in the dwarf fde.  */
 int
-dwarf_get_fde_instr_bytes(Dwarf_Fde inFde, Dwarf_Ptr * outinstraddr,
-    Dwarf_Unsigned * outaddrlen,
-    Dwarf_Error * error)
+dwarf_get_fde_instr_bytes(Dwarf_Fde inFde,
+    Dwarf_Small   ** outinstrs,
+    Dwarf_Unsigned * outinstrslen,
+    Dwarf_Error    * error)
 {
     Dwarf_Unsigned len = 0;
-    unsigned char *instrs = 0;
+    Dwarf_Small *instrs = 0;
     Dwarf_Debug dbg = 0;
 
-    if (inFde == NULL) {
+    if (!inFde) {
         _dwarf_error(dbg, error, DW_DLE_FDE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
     dbg = inFde->fd_dbg;
-    if (dbg == NULL) {
+    if (!dbg) {
         _dwarf_error(dbg, error, DW_DLE_FDE_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
     instrs = inFde->fd_fde_instr_start;
-
-    len = (inFde->fd_fde_start + inFde->fd_length +
-        inFde->fd_length_size + inFde->fd_extension_size) - instrs;
-
-    *outinstraddr = instrs;
-    *outaddrlen = len;
+    len = inFde->fd_fde_end - inFde->fd_fde_instr_start;
+    *outinstrs = instrs;
+    *outinstrslen = len;
     return DW_DLV_OK;
 }
 
@@ -2178,7 +2344,7 @@ dwarf_get_fde_n(Dwarf_Fde * fde_data,
 
     if (fde_data == NULL) {
         _dwarf_error(dbg, error, DW_DLE_FDE_PTR_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     FDE_NULL_CHECKS_AND_SET_DBG(*fde_data, dbg);
@@ -2186,12 +2352,11 @@ dwarf_get_fde_n(Dwarf_Fde * fde_data,
     fdecount = fde_data[0]->fd_is_eh?
         dbg->de_fde_count_eh:dbg->de_fde_count;
     if (fde_index >= fdecount) {
-        return (DW_DLV_NO_ENTRY);
+        return DW_DLV_NO_ENTRY;
     }
     *returned_fde = (*(fde_data + fde_index));
     return DW_DLV_OK;
 }
-
 
 /*  Lopc and hipc are extensions to the interface to
     return the range of addresses that are described
@@ -2210,7 +2375,7 @@ dwarf_get_fde_at_pc(Dwarf_Fde * fde_data,
 
     if (fde_data == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_PTR_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     /*  Assumes fde_data table has at least one entry. */
@@ -2249,32 +2414,28 @@ dwarf_get_fde_at_pc(Dwarf_Fde * fde_data,
             *hipc =
                 fde->fd_initial_location + fde->fd_address_range - 1;
         *returned_fde = fde;
-        return (DW_DLV_OK);
+        return DW_DLV_OK;
     }
 
-    return (DW_DLV_NO_ENTRY);
+    return DW_DLV_NO_ENTRY;
 }
 
-
 /*  Expands a single frame instruction block
-    from a specific cie
-    into a n array of Dwarf_Frame_Op-s.
-    This depends on having the cfa column set sensibly.
+    from a specific cie or fde into a
+    Dwarf_Frame_Instr_Head.
 
     Call dwarf_set_frame_cfa_value() to set the correct column
-    after calling dwarf_init() unless you are using
-    the old MIPS frame interfaces (in which case the default
-    will be ok). (DW_FRAME_CFA_COL3 is a sensible column to use ).
+    after calling dwarf_init().
+    DW_FRAME_CFA_COL3 is a sensible column to use.
 */
 int
 dwarf_expand_frame_instructions(Dwarf_Cie cie,
-    Dwarf_Ptr instruction,
+    Dwarf_Small   *instruction,
     Dwarf_Unsigned i_length,
-    Dwarf_Frame_Op ** returned_op_list,
-    Dwarf_Signed * returned_op_count,
+    Dwarf_Frame_Instr_Head * returned_instr_head,
+    Dwarf_Unsigned * returned_instr_count,
     Dwarf_Error * error)
 {
-    Dwarf_Sword instr_count;
     int res = DW_DLV_ERROR;
     Dwarf_Debug dbg = 0;
     Dwarf_Small * instr_start = instruction;
@@ -2282,13 +2443,17 @@ dwarf_expand_frame_instructions(Dwarf_Cie cie,
 
     if (cie == 0) {
         _dwarf_error(NULL, error, DW_DLE_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     dbg = cie->ci_dbg;
 
-    if (returned_op_list == 0 || returned_op_count == 0) {
-        _dwarf_error(dbg, error, DW_DLE_RET_OP_LIST_NULL);
-        return (DW_DLV_ERROR);
+    if (!returned_instr_head  || !returned_instr_count) {
+        _dwarf_error_string(dbg, error, DW_DLE_RET_OP_LIST_NULL,
+            "DW_DLE_RET_OP_LIST_NULL: "
+            "Calling dwarf_expand_frame_instructions without "
+            "a non-NULL Dwarf_Frame_Instr_Head pointer and "
+            "count pointer seems wrong.");
+        return DW_DLV_ERROR;
     }
     if ( instr_end < instr_start) {
         /*  Impossible unless there was wraparond somewhere and
@@ -2296,9 +2461,7 @@ dwarf_expand_frame_instructions(Dwarf_Cie cie,
         _dwarf_error(dbg, error,DW_DLE_FDE_INSTR_PTR_ERROR);
         return DW_DLV_ERROR;
     }
-
     res = _dwarf_exec_frame_instr( /* make_instr= */ true,
-        returned_op_list,
         /* search_pc */ false,
         /* search_pc_val */ 0,
         /* location */ 0,
@@ -2307,16 +2470,78 @@ dwarf_expand_frame_instructions(Dwarf_Cie cie,
         /* Dwarf_Frame */ NULL,
         cie,
         dbg,
-        dbg->de_frame_cfa_col_number, &instr_count,
-        NULL,NULL,
+        dbg->de_frame_cfa_col_number,
+        /* has more rows */0,
+        /* subsequent_pc */0,
+        returned_instr_head,
+        returned_instr_count,
         error);
     if (res != DW_DLV_OK) {
         return (res);
     }
-    *returned_op_count = instr_count;
     return DW_DLV_OK;
 }
 
+/*  Call to access  a single CFA frame instruction.  */
+int
+dwarf_get_frame_instruction(Dwarf_Frame_Instr_Head head,
+    Dwarf_Unsigned    instr_index,
+    Dwarf_Unsigned  * instr_offset_in_instrs,
+    Dwarf_Small     * cfa_operation,
+    const char     ** fields_description,
+    Dwarf_Unsigned  * u0,
+    Dwarf_Unsigned  * u1,
+    Dwarf_Signed    * s0,
+    Dwarf_Signed    * s1,
+    Dwarf_Unsigned  * code_alignment_factor,
+    Dwarf_Signed    * data_alignment_factor,
+    Dwarf_Block     * expression_block,
+    Dwarf_Error     * error)
+{
+    Dwarf_Frame_Instr ip = 0;
+    Dwarf_Debug dbg = 0;
+    if (!head) {
+        _dwarf_error_string(dbg, error,DW_DLE_CFA_INSTRUCTION_ERROR,
+            "DW_DLE_CFA_INSTRUCTION_ERROR: Head argument NULL "
+            " calling dwarf_get_frame_instruction");
+        return DW_DLV_ERROR;
+    }
+    if (!head->fh_dbg) {
+        _dwarf_error_string(dbg, error,DW_DLE_CFA_INSTRUCTION_ERROR,
+            "DW_DLE_CFA_INSTRUCTION_ERROR: Head missing "
+            "Dwarf_Debug field "
+            " calling dwarf_get_frame_instruction");
+        return DW_DLV_ERROR;
+    }
+    dbg = head->fh_dbg;
+    if (instr_index >= head->fh_array_count) {
+        return DW_DLV_NO_ENTRY;
+    }
+    ip = head->fh_array[instr_index];
+    if (!ip) {
+        _dwarf_error_string(dbg, error,DW_DLE_CFA_INSTRUCTION_ERROR,
+            "DW_DLE_CFA_INSTRUCTION_ERROR: instr array missing "
+            "calling dwarf_get_frame_instruction");
+        return DW_DLV_ERROR;
+    }
+    *instr_offset_in_instrs = ip->fi_instr_offset;
+    *cfa_operation = ip->fi_op;
+    *fields_description = ip->fi_fields;
+    *u0 = ip->fi_u0;
+    *u1 = ip->fi_u1;
+    *s0 = ip->fi_s0;
+    *s1 = ip->fi_s1;
+    /*  These next two might be known to caller already,
+        so let caller not pass useless pointers. */
+    if (code_alignment_factor) {
+        *code_alignment_factor = ip->fi_code_align_factor;
+    }
+    if (data_alignment_factor) {
+        *data_alignment_factor = ip->fi_data_align_factor;
+    }
+    *expression_block = ip->fi_expr;
+    return DW_DLV_OK;
+}
 
 /*  Used by dwarfdump -v to print offsets, for debugging
     dwarf info.
@@ -2341,7 +2566,7 @@ dwarf_fde_section_offset(Dwarf_Debug dbg, Dwarf_Fde in_fde,
     char *start = 0;
     char *loc = 0;
 
-    if(!in_fde) {
+    if (!in_fde) {
         _dwarf_error(dbg, err, DW_DLE_FDE_NULL);
         return DW_DLV_ERROR;
     }
@@ -2373,7 +2598,7 @@ dwarf_cie_section_offset(Dwarf_Debug dbg, Dwarf_Cie in_cie,
     char *start = 0;
     char *loc = 0;
 
-    if(!in_cie) {
+    if (!in_cie) {
         _dwarf_error(dbg, err, DW_DLE_CIE_NULL);
         return DW_DLV_ERROR;
     }
@@ -2384,7 +2609,8 @@ dwarf_cie_section_offset(Dwarf_Debug dbg, Dwarf_Cie in_cie,
     return DW_DLV_OK;
 }
 
-/*  Returns  a pointer to target-specific augmentation data thru augdata
+/*  Returns  a pointer to target-specific augmentation data
+    thru augdata
     and returns the length of the data thru augdata_len.
 
     It's up to the consumer code to know how to interpret the bytes
@@ -2409,7 +2635,7 @@ dwarf_get_cie_augmentation_data(Dwarf_Cie cie,
 {
     if (cie == NULL) {
         _dwarf_error(NULL, error, DW_DLE_CIE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     if (cie->ci_gnu_eh_augmentation_len == 0) {
         return DW_DLV_NO_ENTRY;
@@ -2419,8 +2645,8 @@ dwarf_get_cie_augmentation_data(Dwarf_Cie cie,
     return DW_DLV_OK;
 }
 
-
-/*  Returns  a pointer to target-specific augmentation data thru augdata
+/*  Returns  a pointer to target-specific augmentation data
+    thru augdata
     and returns the length of the data thru augdata_len.
 
     It's up to the consumer code to know how to interpret the bytes
@@ -2447,21 +2673,20 @@ dwarf_get_fde_augmentation_data(Dwarf_Fde fde,
 
     if (fde == NULL) {
         _dwarf_error(NULL, error, DW_DLE_FDE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-    if(!fde->fd_gnu_eh_aug_present) {
+    if (!fde->fd_gnu_eh_aug_present) {
         return DW_DLV_NO_ENTRY;
     }
     cie = fde->fd_cie;
     if (cie == NULL) {
         _dwarf_error(NULL, error, DW_DLE_CIE_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     *augdata = (Dwarf_Small *) fde->fd_gnu_eh_augmentation_bytes;
     *augdata_len = fde->fd_gnu_eh_augmentation_len;
     return DW_DLV_OK;
 }
-
 
 #if 0  /* FOR DEBUGGING */
 /* Used solely for debugging libdwarf. */
@@ -2489,7 +2714,7 @@ dump_frame_rule(char *msg, struct Dwarf_Reg_Rule_s *reg_rule)
         (Dwarf_Unsigned) reg_rule->ru_block);
     return;
 }
-#endif
+#endif /*0*/
 
 /*  This allows consumers to set the 'initial value' so that
     an ISA/ABI specific default can be used, dynamically,
@@ -2508,17 +2733,10 @@ dwarf_set_frame_rule_initial_value(Dwarf_Debug dbg, Dwarf_Half value)
     return orig;
 }
 
-/* The following spelling for backwards compatibility. */
-Dwarf_Half
-dwarf_set_frame_rule_inital_value(Dwarf_Debug dbg, Dwarf_Half value)
-{
-    return dwarf_set_frame_rule_initial_value(dbg,value);
-}
-
 /*  This allows consumers to set the array size of the  reg rules
     table so that
     an ISA/ABI specific value can be used, dynamically,
-    at run time.  Useful for non-MIPS archtectures.
+    at run time.  Useful for non-MIPS architectures.
     The value  defaults  to DW_FRAME_LAST_REG_NUM.
     but dwarfdump can dump multiple ISA/ABI objects so
     consumers want to get this set to what the ABI says is correct.
@@ -2536,7 +2754,8 @@ dwarf_set_frame_rule_table_size(Dwarf_Debug dbg, Dwarf_Half value)
         let the value be too small. Keep it at least to
         DW_FRAME_LAST_REG_NUM.
         This helps prevent libdwarf (mistakenly) indexing outside
-        of of a register array when the ABI reg count is really small.  */
+        of of a register array when the ABI reg count
+        is really small.  */
     if (value < DW_FRAME_LAST_REG_NUM) {
         dbg->de_frame_reg_rules_entry_count = DW_FRAME_LAST_REG_NUM;
     }
@@ -2544,7 +2763,7 @@ dwarf_set_frame_rule_table_size(Dwarf_Debug dbg, Dwarf_Half value)
 }
 /*  This allows consumers to set the CFA register value
     so that an ISA/ABI specific value can be used, dynamically,
-    at run time.  Useful for non-MIPS archtectures.
+    at run time.  Useful for non-MIPS architectures.
     The value  defaults  to DW_FRAME_CFA_COL3 and should be
     higher than any real register in the ABI.
     Dwarfdump can dump multiple ISA/ABI objects so
@@ -2589,7 +2808,7 @@ Dwarf_Small dwarf_set_default_address_size(Dwarf_Debug dbg,
 
 static int
 init_reg_rules_alloc(Dwarf_Debug dbg,struct Dwarf_Frame_s *f,
-   unsigned count, Dwarf_Error * error)
+    unsigned count, Dwarf_Error * error)
 {
     f->fr_reg_count = count;
     f->fr_reg = (struct Dwarf_Reg_Rule_s *)
@@ -2598,7 +2817,7 @@ init_reg_rules_alloc(Dwarf_Debug dbg,struct Dwarf_Frame_s *f,
         if (error) {
             _dwarf_error(dbg, error, DW_DLE_DF_ALLOC_FAIL);
         }
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     dwarf_init_reg_rules_ru(f->fr_reg,0, count,
         dbg->de_frame_rule_initial_value);
@@ -2615,7 +2834,8 @@ dwarf_initialize_fde_table(Dwarf_Debug dbg,
     fde_table->fr_loc = 0;
     fde_table->fr_next = 0;
 
-    return init_reg_rules_alloc(dbg,fde_table,table_real_data_size,error);
+    return init_reg_rules_alloc(dbg,fde_table,
+        table_real_data_size,error);
 }
 static void
 dwarf_free_fde_table(struct Dwarf_Frame_s *fde_table)
@@ -2624,7 +2844,6 @@ dwarf_free_fde_table(struct Dwarf_Frame_s *fde_table)
     fde_table->fr_reg_count = 0;
     fde_table->fr_reg = 0;
 }
-
 
 /*  Return DW_DLV_OK if we succeed. else return DW_DLV_ERROR.
 */
@@ -2636,7 +2855,8 @@ _dwarf_frame_constructor(Dwarf_Debug dbg, void *frame)
     if (!dbg) {
         return DW_DLV_ERROR;
     }
-    return init_reg_rules_alloc(dbg,fp,dbg->de_frame_reg_rules_entry_count, 0);
+    return init_reg_rules_alloc(dbg,fp,
+        dbg->de_frame_reg_rules_entry_count, 0);
 }
 
 void
@@ -2654,6 +2874,27 @@ _dwarf_fde_destructor(void *f)
         fde->fd_have_fde_tab = false;
     }
 }
+void
+_dwarf_frame_instr_destructor(void *f)
+{
+    Dwarf_Frame_Instr_Head head = f;
+    Dwarf_Debug dbg = head->fh_dbg;
+    Dwarf_Unsigned count = head->fh_array_count;
+    Dwarf_Unsigned i = 0;
+
+    for ( ; i < count ; ++i) {
+        free(head->fh_array[i]);
+        head->fh_array[i] = 0;
+    }
+    dwarf_dealloc(dbg,head->fh_array,DW_DLA_LIST);
+    head->fh_array = 0;
+    head->fh_array_count = 0;
+}
+void
+dwarf_dealloc_frame_instr_head(Dwarf_Frame_Instr_Head h)
+{
+    dwarf_dealloc(h->fh_dbg,h,DW_DLA_FRAME_INSTR_HEAD);
+}
 
 static void
 dwarf_init_reg_rules_ru(struct Dwarf_Reg_Rule_s *base,
@@ -2662,24 +2903,13 @@ dwarf_init_reg_rules_ru(struct Dwarf_Reg_Rule_s *base,
     struct Dwarf_Reg_Rule_s *r = base+first;
     unsigned i = first;
     for (; i < last; ++i,++r) {
-        r->ru_is_off = 0;
+        r->ru_is_offset = 0;
         r->ru_value_type = DW_EXPR_OFFSET;
         r->ru_register = initial_value;
-        r->ru_offset_or_block_len = 0;
-        r->ru_block = 0;
-    }
-}
-static void
-dwarf_init_reg_rules_dw(struct Dwarf_Regtable_Entry_s *base,
-    unsigned first, unsigned last,int initial_value)
-{
-    struct Dwarf_Regtable_Entry_s *r = base+first;
-    unsigned i = first;
-    for (; i < last; ++i,++r) {
-        r->dw_offset_relevant = 0;
-        r->dw_value_type = DW_EXPR_OFFSET;
-        r->dw_regnum = initial_value;
-        r->dw_offset = 0;
+        r->ru_offset = 0;
+        r->ru_args_size = 0;
+        r->ru_block.bl_data = 0;
+        r->ru_block.bl_len = 0;
     }
 }
 static void
@@ -2692,7 +2922,9 @@ dwarf_init_reg_rules_dw3(struct Dwarf_Regtable_Entry3_s *base,
         r->dw_offset_relevant = 0;
         r->dw_value_type = DW_EXPR_OFFSET;
         r->dw_regnum = initial_value;
-        r->dw_offset_or_block_len = 0;
-        r->dw_block_ptr = 0;
+        r->dw_offset = 0;
+        r->dw_args_size = 0;
+        r->dw_block.bl_data = 0;
+        r->dw_block.bl_len = 0;
     }
 }

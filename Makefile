@@ -21,28 +21,41 @@ CFLAGS_LIBDWARF = $(CFLAGS) -DDW_TSHASHTYPE=uintptr_t \
 
 
 # libdwarf
-DWARF_SRC_REL = dwarf_alloc.c \
+DWARF_SRC_REL = \
+		dwarf_abbrev.c \
+		dwarf_alloc.c \
+		dwarf_debuglink.c \
+		dwarf_debugnames.c \
 		dwarf_die_deliv.c \
-		dwarf_dnames.c \
 		dwarf_dsc.c \
 		dwarf_error.c \
+		dwarf_find_sigref.c \
+		dwarf_fission_to_cu.c \
 		dwarf_form.c \
 		dwarf_frame.c \
 		dwarf_frame2.c \
 		dwarf_global.c \
+		dwarf_gnu_index.c \
 		dwarf_groups.c \
 		dwarf_harmless.c \
 		dwarf_init_finish.c \
 		dwarf_leb.c \
 		dwarf_line.c \
+		dwarf_loc.c \
+		dwarf_locationop_read.c \
+		dwarf_loclists.c \
 		dwarf_macro5.c \
+		dwarf_memcpy_swap.c \
+		dwarf_names.c \
 		dwarf_query.c \
 		dwarf_ranges.c \
+		dwarf_rnglists.c \
+		dwarf_str_offsets.c \
+		dwarf_string.c \
 		dwarf_tied.c \
 		dwarf_tsearchhash.c \
 		dwarf_util.c \
 		dwarf_xu_index.c \
-		pro_encode_nm.c \
 
 DWARF_SRC = $(patsubst %,libdwarf/%,$(DWARF_SRC_REL))
 DWARF_OBJ = $(patsubst %.c,%.o,$(DWARF_SRC))

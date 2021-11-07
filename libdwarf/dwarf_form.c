@@ -1,44 +1,92 @@
 /*
   Copyright (C) 2000,2002,2004,2005 Silicon Graphics, Inc. All Rights Reserved.
   Portions Copyright 2007-2010 Sun Microsystems, Inc. All rights reserved.
-  Portions Copyright 2008-2018 David Anderson. All rights reserved.
+  Portions Copyright 2008-2020 David Anderson. All rights reserved.
   Portions Copyright 2010-2012 SN Systems Ltd. All rights reserved.
 
-  This program is free software; you can redistribute it and/or modify it
-  under the terms of version 2.1 of the GNU Lesser General Public License
-  as published by the Free Software Foundation.
+  This program is free software; you can redistribute it
+  and/or modify it under the terms of version 2.1 of the
+  GNU Lesser General Public License as published by the Free
+  Software Foundation.
 
-  This program is distributed in the hope that it would be useful, but
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  This program is distributed in the hope that it would be
+  useful, but WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+  PURPOSE.
 
-  Further, this software is distributed without any warranty that it is
-  free of the rightful claim of any third person regarding infringement
-  or the like.  Any license provided herein, whether implied or
-  otherwise, applies only to this software file.  Patent licenses, if
-  any, provided herein do not apply to combinations of this program with
-  other software, or any other product whatsoever.
+  Further, this software is distributed without any warranty
+  that it is free of the rightful claim of any third person
+  regarding infringement or the like.  Any license provided
+  herein, whether implied or otherwise, applies only to this
+  software file.  Patent licenses, if any, provided herein
+  do not apply to combinations of this program with other
+  software, or any other product whatsoever.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this program; if not, write the Free Software
-  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston MA 02110-1301,
-  USA.
+  You should have received a copy of the GNU Lesser General
+  Public License along with this program; if not, write the
+  Free Software Foundation, Inc., 51 Franklin Street - Fifth
+  Floor, Boston MA 02110-1301, USA.
 
 */
 
 #include "config.h"
 #include <stdio.h>
-#include "dwarf_incl.h"
+#if defined(_WIN32) && defined(HAVE_STDAFX_H)
+#include "stdafx.h"
+#endif /* HAVE_STDAFX_H */
+#ifdef HAVE_STRING_H
+#include <string.h>  /* strcpy() strlen() */
+#endif
+#ifdef HAVE_STDDEF_H
+#include <stddef.h>
+#endif
+#include "libdwarf_private.h"
+#include "dwarf.h"
+#include "libdwarf.h"
+#include "dwarf_base_types.h"
+#include "dwarf_opaque.h"
 #include "dwarf_alloc.h"
+#include "dwarf_string.h"
 #include "dwarf_error.h"
 #include "dwarf_util.h"
 #include "dwarf_die_deliv.h"
+#include "dwarf_str_offsets.h"
+#include "dwarf_string.h"
 
-#define TRUE 1
-#define FALSE 0
+/*  It is necessary at times to cause errors of this sort
+    in determining what we really have.  So best to avoid
+    too much malloc and free, hence the static constructor
+    dwarfstring will use malloc if we guess too-small
+    for the size of mbuf. */
+static void
+generate_form_error(Dwarf_Debug dbg,
+    Dwarf_Error *error,
+    unsigned form,
+    int err_code,
+    const char *errname,
+    const char *funcname)
+{
+    dwarfstring m;
+    char mbuf[DWARFSTRING_ALLOC_SIZE];
+    const char * defaultname = "<unknown form>";
 
-/* This code was repeated many times, now it
-   is all in one place. */
+    dwarfstring_constructor_static(&m,mbuf,
+        sizeof(mbuf));
+    dwarfstring_append(&m,(char *)errname);
+    dwarfstring_append(&m,": In function ");
+    dwarfstring_append(&m,(char *)funcname);
+    dwarfstring_append_printf_u(&m,
+        " on seeing form  0x%x ",form);
+    dwarf_get_FORM_name(form,&defaultname);
+    dwarfstring_append_printf_s(&m,
+        " (%s)",(char *)defaultname);
+    _dwarf_error_string(dbg,error,err_code,
+        dwarfstring_string(&m));
+    dwarfstring_destructor(&m);
+}
+
+/*  This code was repeated many times, now it
+    is all in one place. */
 static int
 get_attr_dbg(Dwarf_Debug *dbg,
     Dwarf_CU_Context * cu_context,
@@ -48,18 +96,18 @@ get_attr_dbg(Dwarf_Debug *dbg,
     Dwarf_CU_Context cup;
     if (attr == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     cup = attr->ar_cu_context;
     if (cup == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_NO_CU_CONTEXT);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     if (cup->cc_dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     *cu_context = cup;
     *dbg = cup->cc_dbg;
@@ -97,106 +145,80 @@ dwarf_whatform_direct(Dwarf_Attribute attr,
     }
 
     *return_form = attr->ar_attribute_form_direct;
-    return (DW_DLV_OK);
+    return DW_DLV_OK;
 }
 
-
-/*  This code was contributed some time ago
-    and the return value is in the wrong form,
-    but we are not fixing it.
-    As of 2016 it is not clear that Sun Sparc
+/*  This code was contributed around 2007.
+    As of 2021 it is not clear that Sun Sparc
     compilers are in current use, nor whether
     there is a reason to make reads of
     this data format safe from corrupted object files.
-*/
-void *
-dwarf_uncompress_integer_block(
-    Dwarf_Debug      dbg,
-    Dwarf_Bool       unit_is_signed,
-    Dwarf_Small      unit_length_in_bits,
-    void*            input_block,
-    Dwarf_Unsigned   input_length_in_bytes,
-    Dwarf_Unsigned*  output_length_in_units_ptr,
-    Dwarf_Error*     error
-)
+
+    Pass in the content of a block and the length of that
+    content. On success return DW_DLV_OK and set *value_count
+    to the size of the array returned through value_array. */
+int
+dwarf_uncompress_integer_block_a(Dwarf_Debug dbg,
+    Dwarf_Unsigned     input_length_in_bytes,
+    void             * input_block,
+    Dwarf_Unsigned   * value_count,
+    Dwarf_Signed    ** value_array,
+    Dwarf_Error      * error)
 {
     Dwarf_Unsigned output_length_in_units = 0;
-    void * output_block = 0;
+    Dwarf_Signed * output_block = 0;
     unsigned i = 0;
     char * ptr = 0;
     int remain = 0;
-    Dwarf_sfixed * array = 0;
+    Dwarf_Signed * array = 0;
     Dwarf_Byte_Ptr endptr = (Dwarf_Byte_Ptr)input_block+
         input_length_in_bytes;
-
-    if (dbg == NULL) {
-        _dwarf_error(NULL, error, DW_DLE_DBG_NULL);
-        return((void *)DW_DLV_BADADDR);
-    }
-
-    if (unit_is_signed == false ||
-        unit_length_in_bits != 32 ||
-        input_block == NULL ||
-        input_length_in_bytes == 0 ||
-        output_length_in_units_ptr == NULL) {
-
-        _dwarf_error(NULL, error, DW_DLE_BADBITC);
-        return ((void *) DW_DLV_BADADDR);
-    }
-
-    /* At this point we assume the format is: signed 32 bit */
-
-    /* first uncompress everything to find the total size. */
 
     output_length_in_units = 0;
     remain = input_length_in_bytes;
     ptr = input_block;
     while (remain > 0) {
-        Dwarf_Word len = 0;
+        Dwarf_Unsigned len = 0;
         Dwarf_Signed value = 0;
         int rres = 0;
 
-        rres = _dwarf_decode_s_leb128_chk((unsigned char *)ptr,
-            &len, &value,endptr);
+        rres = dwarf_decode_signed_leb128((char *)ptr,
+            &len, &value,(char *)endptr);
         if (rres != DW_DLV_OK) {
-            return ((void *)DW_DLV_BADADDR);
+            _dwarf_error(NULL, error, DW_DLE_LEB_IMPROPER);
+            return DW_DLV_ERROR;
         }
         ptr += len;
         remain -= len;
         output_length_in_units++;
     }
-
     if (remain != 0) {
         _dwarf_error(NULL, error, DW_DLE_ALLOC_FAIL);
-        return((void *)DW_DLV_BADADDR);
+        return DW_DLV_ERROR;
     }
 
-    /* then alloc */
-
-    output_block = (void *)
+    output_block = (Dwarf_Signed*)
         _dwarf_get_alloc(dbg,
             DW_DLA_STRING,
-            output_length_in_units * (unit_length_in_bits / 8));
-    if (output_block == NULL) {
+            output_length_in_units * sizeof(Dwarf_Signed));
+    if (!output_block) {
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-        return((void*)DW_DLV_BADADDR);
+        return DW_DLV_ERROR;
     }
-
-    /* then uncompress again and copy into new buffer */
-
-    array = (Dwarf_sfixed *) output_block;
+    array = output_block;
     remain = input_length_in_bytes;
     ptr = input_block;
     for (i=0; i<output_length_in_units && remain>0; i++) {
         Dwarf_Signed num;
-        Dwarf_Word len;
+        Dwarf_Unsigned len;
         int sres = 0;
 
-        sres = _dwarf_decode_s_leb128_chk((unsigned char *)ptr,
-            &len, &num,endptr);
+        sres = dwarf_decode_signed_leb128((char *)ptr,
+            &len, &num,(char *)endptr);
         if (sres != DW_DLV_OK) {
             dwarf_dealloc(dbg,output_block,DW_DLA_STRING);
-            return ((void *) DW_DLV_BADADDR);
+            _dwarf_error(NULL, error, DW_DLE_LEB_IMPROPER);
+            return DW_DLV_ERROR;
         }
         ptr += len;
         remain -= len;
@@ -204,21 +226,32 @@ dwarf_uncompress_integer_block(
     }
 
     if (remain != 0) {
-        dwarf_dealloc(dbg, (unsigned char *)output_block, DW_DLA_STRING);
+        dwarf_dealloc(dbg, (unsigned char *)output_block,
+            DW_DLA_STRING);
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-        return((Dwarf_P_Attribute)DW_DLV_BADADDR);
+        return DW_DLV_ERROR;
     }
 
-    *output_length_in_units_ptr = output_length_in_units;
-    return output_block;
+    *value_count = output_length_in_units;
+    *value_array = output_block;
+    return DW_DLV_OK;
 }
+
+/*  This code was contributed around 2007
+    and the return value is in the wrong form.
+    See dwarf_uncompress_integer_block_a() above.
+
+    As of 2019 it is not clear that Sun Sparc
+    compilers are in current use, nor whether
+    there is a reason to make reads of
+    this data format safe from corrupted object files.
+*/
 
 void
 dwarf_dealloc_uncompressed_block(Dwarf_Debug dbg, void * space)
 {
     dwarf_dealloc(dbg, space, DW_DLA_STRING);
 }
-
 
 int
 dwarf_whatform(Dwarf_Attribute attr,
@@ -232,9 +265,8 @@ dwarf_whatform(Dwarf_Attribute attr,
         return res;
     }
     *return_form = attr->ar_attribute_form;
-    return (DW_DLV_OK);
+    return DW_DLV_OK;
 }
-
 
 /*
     This function is analogous to dwarf_whatform.
@@ -256,7 +288,6 @@ dwarf_whatattr(Dwarf_Attribute attr,
     return DW_DLV_OK;
 }
 
-
 /*  Convert an offset within the local CU into a section-relative
     debug_info (or debug_types) offset.
     See dwarf_global_formref() and dwarf_formref()
@@ -264,7 +295,9 @@ dwarf_whatattr(Dwarf_Attribute attr,
 */
 int
 dwarf_convert_to_global_offset(Dwarf_Attribute attr,
-    Dwarf_Off offset, Dwarf_Off * ret_offset, Dwarf_Error * error)
+    Dwarf_Off offset,
+    Dwarf_Off * ret_offset,
+    Dwarf_Error * error)
 {
     Dwarf_Debug dbg = 0;
     Dwarf_CU_Context cu_context = 0;
@@ -300,16 +333,26 @@ dwarf_convert_to_global_offset(Dwarf_Attribute attr,
             any other CU can be correct for a DWP Package File offset
             */
         break;
+    default: {
+        dwarfstring m;
 
-    default:
-        _dwarf_error(dbg, error, DW_DLE_BAD_REF_FORM);
-        return (DW_DLV_ERROR);
+        dwarfstring_constructor(&m);
+        dwarfstring_append_printf_u(&m,
+            "DW_DLE_BAD_REF_FORM. The form "
+            "code is 0x%x which cannot be converted to a global "
+            " offset by "
+            "dwarf_convert_to_global_offset()",
+            attr->ar_attribute_form);
+        _dwarf_error_string(dbg, error, DW_DLE_BAD_REF_FORM,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+        return DW_DLV_ERROR;
+        }
     }
 
     *ret_offset = (offset);
     return DW_DLV_OK;
 }
-
 
 /*  A global offset cannot be returned by this interface:
     see dwarf_global_formref().
@@ -342,16 +385,17 @@ dwarf_convert_to_global_offset(Dwarf_Attribute attr,
 
     DW_FORM_addrx
     DW_FORM_strx
+    DW_FORM_rnglistx
     DW_FORM_GNU_addr_index
     DW_FORM_GNU_str_index
     are not references to .debug_info/.debug_types,
     so they are not allowed here. */
 
-
 int
 dwarf_formref(Dwarf_Attribute attr,
-   Dwarf_Off * ret_offset,
-   Dwarf_Error * error)
+    Dwarf_Off * ret_offset,
+    Dwarf_Bool * ret_is_info,
+    Dwarf_Error * error)
 {
     Dwarf_Debug dbg = 0;
     Dwarf_Unsigned offset = 0;
@@ -359,6 +403,7 @@ dwarf_formref(Dwarf_Attribute attr,
     Dwarf_Unsigned maximumoffset = 0;
     int res = DW_DLV_ERROR;
     Dwarf_Byte_Ptr section_end = 0;
+    Dwarf_Bool is_info = TRUE;
 
     *ret_offset = 0;
     res  = get_attr_dbg(&dbg,&cu_context,attr,error);
@@ -367,6 +412,7 @@ dwarf_formref(Dwarf_Attribute attr,
     }
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
+    is_info = cu_context->cc_is_info;
 
     switch (attr->ar_attribute_form) {
 
@@ -401,18 +447,45 @@ dwarf_formref(Dwarf_Attribute attr,
         offset = localoffset;
         break;
     }
-    case DW_FORM_ref_sig8:
+    case DW_FORM_ref_sig8: {
+        /*  We need to look for a local reference here.
+            The function we are in is only CU_local
+            offsets returned. */
+#if 0
+        Dwarf_Sig8 sig8;
+        memcpy(&sig8,ptr,sizeof(Dwarf_Sig8));
+        res = dwarf_find_die_given_sig8(dbg,
+            &sig8,
+        We could look, then determine if
+        resutling offset is actually local.
+#endif /*0*/
+
         /*  We cannot handle this here.
-            The reference is to .debug_types
+            The reference could be to .debug_types
+            or another CU!
             not a .debug_info CU local offset. */
         _dwarf_error(dbg, error, DW_DLE_REF_SIG8_NOT_HANDLED);
-        return (DW_DLV_ERROR);
-    default:
-        _dwarf_error(dbg, error, DW_DLE_BAD_REF_FORM);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
+    }
+    default: {
+        dwarfstring m;
+
+        dwarfstring_constructor(&m);
+        dwarfstring_append_printf_u(&m,
+            "DW_DLE_BAD_REF_FORM. The form "
+            "code is 0x%x which does not have an offset "
+            " for "
+            "dwarf_formref() to return.",
+            attr->ar_attribute_form);
+        _dwarf_error_string(dbg, error, DW_DLE_BAD_REF_FORM,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+        return DW_DLV_ERROR;
+        }
     }
 
-    /* Check that offset is within current cu portion of .debug_info. */
+    /*  Check that offset is within current
+        cu portion of .debug_info. */
 
     maximumoffset = cu_context->cc_length +
         cu_context->cc_length_size +
@@ -438,11 +511,13 @@ dwarf_formref(Dwarf_Attribute attr,
             DW_AT_sibling != attr->ar_attribute &&
             offset > maximumoffset) {
             _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_OFFSET_BAD);
-            /* Return the incorrect offset for better error reporting */
+            /*  Return the incorrect offset for better
+                error reporting */
             *ret_offset = (offset);
             return DW_DLV_ERROR;
         }
     }
+    *ret_is_info = is_info;
     *ret_offset = (offset);
     return DW_DLV_OK;
 }
@@ -450,7 +525,6 @@ dwarf_formref(Dwarf_Attribute attr,
 static int
 _dwarf_formsig8_internal(Dwarf_Attribute attr,
     int formexpected,
-    int formerrnum,
     Dwarf_Sig8 * returned_sig_bytes,
     Dwarf_Error*     error)
 {
@@ -464,16 +538,15 @@ _dwarf_formsig8_internal(Dwarf_Attribute attr,
         return res;
     }
 
-    if (attr->ar_attribute_form != formexpected ) {
-        _dwarf_error(dbg, error, formerrnum);
-        return (DW_DLV_ERROR);
+    if (attr->ar_attribute_form != formexpected) {
+        return DW_DLV_NO_ENTRY;
     }
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
     field_end = attr->ar_debug_ptr + sizeof(Dwarf_Sig8);
     if (field_end > section_end) {
         _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_OFFSET_BAD);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     memcpy(returned_sig_bytes, attr->ar_debug_ptr,
@@ -487,7 +560,6 @@ dwarf_formsig8_const(Dwarf_Attribute attr,
     Dwarf_Error* error)
 {
     int res  =_dwarf_formsig8_internal(attr, DW_FORM_data8,
-        DW_DLE_ATTR_FORM_NOT_DATA8,
         returned_sig_bytes,error);
     return res;
 }
@@ -495,7 +567,9 @@ dwarf_formsig8_const(Dwarf_Attribute attr,
 /*  dwarf_formsig8 returns in the caller-provided 8 byte area
     the 8 bytes of a DW_FORM_ref_sig8 (copying the bytes
     directly to the caller).  Not a string, an 8 byte
-    MD5 hash.  This function is new in DWARF4 libdwarf.
+    MD5 hash or a signature.
+    This function is new in DWARF4 libdwarf and used in
+    more places in DWARF5.
 */
 int
 dwarf_formsig8(Dwarf_Attribute attr,
@@ -503,13 +577,42 @@ dwarf_formsig8(Dwarf_Attribute attr,
     Dwarf_Error* error)
 {
     int res  = _dwarf_formsig8_internal(attr, DW_FORM_ref_sig8,
-        DW_DLE_BAD_REF_SIG8_FORM,
         returned_sig_bytes,error);
     return res;
 }
 
+/*  This finds a target via a sig8 and if
+    DWARF4 is likely finding a reference from .debug_info
+    to .debug_types.  So the offset may or may not be
+    in the same section if DWARF4. */
+static int
+find_sig8_target_as_global_offset(Dwarf_Attribute attr,
+    Dwarf_Sig8  *sig8,
+    Dwarf_Bool  *is_info,
+    Dwarf_Off   *targoffset,
+    Dwarf_Error *error)
+{
+    Dwarf_Die  targdie = 0;
+    Dwarf_Bool targ_is_info = 0;
+    Dwarf_Off  localoff = 0;
+    int res = 0;
 
-
+    targ_is_info = attr->ar_cu_context->cc_is_info;
+    memcpy(sig8,attr->ar_debug_ptr,sizeof(Dwarf_Sig8));
+    res = dwarf_find_die_given_sig8(attr->ar_dbg,
+        sig8,&targdie,&targ_is_info,error);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    res = dwarf_die_offsets(targdie,targoffset,&localoff,error);
+    if (res != DW_DLV_OK) {
+        dwarf_dealloc_die(targdie);
+        return res;
+    }
+    *is_info = targdie->di_cu_context->cc_is_info;
+    dwarf_dealloc_die(targdie);
+    return DW_DLV_OK;
+}
 
 /*  Since this returns section-relative debug_info offsets,
     this can represent all REFERENCE forms correctly
@@ -519,7 +622,7 @@ dwarf_formsig8(Dwarf_Attribute attr,
     DWARF2 as address-size but which was always an offset
     so should have always been offset size (wording
     corrected in DWARF3).
-    gcc and Go and libdwarf producer code
+        gcc and Go and libdwarf producer code
     define the length of the value of DW_FORM_ref_addr
     per the version. So for V2 it is address-size and V3 and later
     it is offset-size.
@@ -527,17 +630,51 @@ dwarf_formsig8(Dwarf_Attribute attr,
     See the DWARF4 document for the 3 cases fitting
     reference forms.  The caller must determine which section the
     reference 'points' to.  The function added in November 2009,
-    dwarf_get_form_class(), helps in this regard.  */
+    dwarf_get_form_class(), helps in this regard.
 
+    unlike dwarf_formref(), this allows references to
+    sections other than just .debug_info/.debug_types.
+    See case DW_FORM_sec_offset:
+    case DW_FORM_GNU_ref_alt:   2013 GNU extension
+    case DW_FORM_GNU_strp_alt:  2013 GNU extension
+    case DW_FORM_strp_sup:      DWARF5, sup string section
+    case DW_FORM_line_strp:     DWARF5, .debug_line_str section
+*/
+
+/*  This follows DW_FORM_ref_sig8 so could got
+    to any CU and from debug_info to debug_types
+    (or vice versa?)
+    dwarf_global_formref_b is aimed at for DIE references.
+    Only the DW_FORM_ref_sig8 form can change
+    from a cu_context in .debug_info
+    to one in .debug_types (DWARF4 only).
+    For references to other sections it is simpler
+    to call the original: dwarf_global_formref.
+*/
 int
 dwarf_global_formref(Dwarf_Attribute attr,
-    Dwarf_Off * ret_offset, Dwarf_Error * error)
+    Dwarf_Off * ret_offset,
+    Dwarf_Error * error)
+{
+    Dwarf_Bool is_info = 0;
+    int res = 0;
+
+    res = dwarf_global_formref_b(attr,ret_offset,
+        &is_info,error);
+    return res;
+}
+int
+dwarf_global_formref_b(Dwarf_Attribute attr,
+    Dwarf_Off * ret_offset,
+    Dwarf_Bool * offset_is_info,
+    Dwarf_Error * error)
 {
     Dwarf_Debug dbg = 0;
     Dwarf_Unsigned offset = 0;
     Dwarf_CU_Context cu_context = 0;
     Dwarf_Half context_version = 0;
     Dwarf_Byte_Ptr section_end = 0;
+    Dwarf_Bool is_info = TRUE;
 
     int res  = get_attr_dbg(&dbg,&cu_context,attr,error);
     if (res != DW_DLV_OK) {
@@ -546,6 +683,7 @@ dwarf_global_formref(Dwarf_Attribute attr,
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
     context_version = cu_context->cc_version_stamp;
+    is_info = cu_context->cc_is_info;
     switch (attr->ar_attribute_form) {
 
     case DW_FORM_ref1:
@@ -586,7 +724,7 @@ dwarf_global_formref(Dwarf_Attribute attr,
             cu_context->cc_length_size +
             cu_context->cc_extension_size) {
             _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_OFFSET_BAD);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
 
         /* globalize the offset */
@@ -600,9 +738,9 @@ dwarf_global_formref(Dwarf_Attribute attr,
         That was first clearly documented in DWARF3.
         In DWARF4 these two forms are no longer references. */
     case DW_FORM_data4:
-        if (context_version == DW_CU_VERSION4) {
+        if (context_version >= DW_CU_VERSION4) {
             _dwarf_error(dbg, error, DW_DLE_NOT_REF_FORM);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
             attr->ar_debug_ptr, DWARF_32BIT_SIZE,
@@ -610,9 +748,9 @@ dwarf_global_formref(Dwarf_Attribute attr,
         /* The offset is global. */
         break;
     case DW_FORM_data8:
-        if (context_version == DW_CU_VERSION4) {
+        if (context_version >= DW_CU_VERSION4) {
             _dwarf_error(dbg, error, DW_DLE_NOT_REF_FORM);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
         READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
             attr->ar_debug_ptr, DWARF_64BIT_SIZE,
@@ -640,9 +778,20 @@ dwarf_global_formref(Dwarf_Attribute attr,
                     attr->ar_debug_ptr, DWARF_64BIT_SIZE,
                     error,section_end);
             } else {
-                _dwarf_error(dbg, error, DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
-                return (DW_DLV_ERROR);
+                _dwarf_error(dbg, error,
+                    DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
+                return DW_DLV_ERROR;
             }
+        }
+        break;
+    /*  Index into .debug_rnglists/.debug_loclists section.
+        Return the index itself. */
+    case DW_FORM_loclistx:
+    case DW_FORM_rnglistx: {
+        unsigned length_size = cu_context->cc_length_size;
+        READ_UNALIGNED_CK(dbg, offset, Dwarf_Unsigned,
+            attr->ar_debug_ptr, length_size,
+            error,section_end);
         }
         break;
     case DW_FORM_sec_offset:
@@ -666,25 +815,60 @@ dwarf_global_formref(Dwarf_Attribute attr,
                     attr->ar_debug_ptr, DWARF_64BIT_SIZE,
                     error,section_end);
             } else {
-                _dwarf_error(dbg, error, DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
-                return (DW_DLV_ERROR);
+                _dwarf_error(dbg, error,
+                    DW_DLE_FORM_SEC_OFFSET_LENGTH_BAD);
+                return DW_DLV_ERROR;
             }
         }
         break;
-    case DW_FORM_ref_sig8: /* FIXME */
-        /*  We cannot handle this yet.
-            The reference is to .debug_types, and
-            this function only returns an offset in
-            .debug_info at this point. */
-        _dwarf_error(dbg, error, DW_DLE_REF_SIG8_NOT_HANDLED);
-        return (DW_DLV_ERROR);
-    default:
-        _dwarf_error(dbg, error, DW_DLE_BAD_REF_FORM);
-        return (DW_DLV_ERROR);
+    case DW_FORM_ref_sig8: {
+        /*  This, in DWARF4, is how
+            .debug_info refers to .debug_types. */
+        Dwarf_Sig8 sig8;
+        Dwarf_Bool t_is_info = TRUE;
+        Dwarf_Unsigned t_offset = 0;
+
+        memcpy(&sig8,attr->ar_debug_ptr,sizeof(Dwarf_Sig8));
+        res = find_sig8_target_as_global_offset(attr,
+            &sig8,&t_is_info,&t_offset,error);
+        if (res == DW_DLV_ERROR) {
+            _dwarf_error_string(dbg, error,
+                DW_DLE_REF_SIG8_NOT_HANDLED,
+                "DW_DLE_REF_SIG8_NOT_HANDLED: "
+                " problem finding target");
+            return DW_DLV_ERROR;
+        }
+        if (res == DW_DLV_NO_ENTRY) {
+            return res;
+        }
+        is_info = t_is_info;
+        offset = t_offset;
+        break;
+    }
+    default: {
+        dwarfstring m;
+        int formcode = attr->ar_attribute_form;
+        int fcres = 0;
+        const char *name = 0;
+
+        dwarfstring_constructor(&m);
+        dwarfstring_append_printf_u(&m,
+            "DW_DLE_BAD_REF_FORM: The form code is 0x%x ",
+            formcode);
+        fcres  = dwarf_get_FORM_name (formcode,&name);
+        if (fcres != DW_DLV_OK) {
+            name="<UnknownFormCode>";
+        }
+        dwarfstring_append_printf_s(&m,
+            " %s.",(char *)name);
+        _dwarf_error_string(dbg, error, DW_DLE_BAD_REF_FORM,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+        return DW_DLV_ERROR;
+        }
     }
 
-    /*  We do not know what section the offset refers to, so
-        we have no way to check it for correctness. */
+    *offset_is_info = is_info;
     *ret_offset = offset;
     return DW_DLV_OK;
 }
@@ -754,8 +938,7 @@ dwarf_get_debug_addr_index(Dwarf_Attribute attr,
         return res;
     }
     theform = attr->ar_attribute_form;
-    if (theform == DW_FORM_GNU_addr_index ||
-        theform == DW_FORM_addrx) {
+    if (dwarf_addr_form_is_indexed(theform)) {
         Dwarf_Unsigned index = 0;
 
         res = _dwarf_get_addr_index_itself(theform,
@@ -770,11 +953,11 @@ dwarf_get_debug_addr_index(Dwarf_Attribute attr,
 
 static int
 dw_read_index_val_itself(Dwarf_Debug dbg,
-   unsigned theform,
-   Dwarf_Small *info_ptr,
-   Dwarf_Small *section_end,
-   Dwarf_Unsigned *return_index,
-   Dwarf_Error *error)
+    unsigned theform,
+    Dwarf_Small *info_ptr,
+    Dwarf_Small *section_end,
+    Dwarf_Unsigned *return_index,
+    Dwarf_Error *error)
 {
     Dwarf_Unsigned index = 0;
 
@@ -847,7 +1030,6 @@ dwarf_get_debug_str_index(Dwarf_Attribute attr,
     return indxres;
 }
 
-
 int
 _dwarf_extract_data16(Dwarf_Debug dbg,
     Dwarf_Small *data,
@@ -892,7 +1074,10 @@ dwarf_formdata16(Dwarf_Attribute attr,
     }
     attrform = attr->ar_attribute_form;
     if (attrform != DW_FORM_data16) {
-        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
+        generate_form_error(dbg,error,attrform,
+            DW_DLE_ATTR_FORM_BAD,
+            "DW_DLE_ATTR_FORM_BAD",
+            "dwarf_formdata16");
         return DW_DLV_ERROR;
     }
     res  = get_attr_dbg(&dbg,&cu_context,attr,error);
@@ -909,8 +1094,22 @@ dwarf_formdata16(Dwarf_Attribute attr,
     return res;
 }
 
-
-
+/*  The *addrx are DWARF5 standard.
+    The GNU form is non-standard gcc DWARF4 */
+Dwarf_Bool
+dwarf_addr_form_is_indexed(int form)
+{
+    switch(form) {
+    case DW_FORM_addrx:
+    case DW_FORM_addrx1:
+    case DW_FORM_addrx2:
+    case DW_FORM_addrx3:
+    case DW_FORM_addrx4:
+    case DW_FORM_GNU_addr_index:
+        return TRUE;
+    }
+    return FALSE;
+}
 
 int
 dwarf_formaddr(Dwarf_Attribute attr,
@@ -920,18 +1119,14 @@ dwarf_formaddr(Dwarf_Attribute attr,
     Dwarf_Addr ret_addr = 0;
     Dwarf_CU_Context cu_context = 0;
     Dwarf_Half attrform = 0;
+    int res = 0;
 
-    int res  = get_attr_dbg(&dbg,&cu_context,attr,error);
+    res  = get_attr_dbg(&dbg,&cu_context,attr,error);
     if (res != DW_DLV_OK) {
         return res;
     }
     attrform = attr->ar_attribute_form;
-    if (attrform == DW_FORM_addrx ||
-        attrform == DW_FORM_addrx1 ||
-        attrform == DW_FORM_addrx2 ||
-        attrform == DW_FORM_addrx3 ||
-        attrform == DW_FORM_addrx4 ||
-        attrform == DW_FORM_GNU_addr_index) {
+    if (dwarf_addr_form_is_indexed(attrform)) {
         res = _dwarf_look_in_local_and_tied(
             attrform,
             cu_context,
@@ -943,10 +1138,12 @@ dwarf_formaddr(Dwarf_Attribute attr,
     if (attrform == DW_FORM_addr
         /*  || attrform == DW_FORM_ref_addr Allowance of
             DW_FORM_ref_addr was a mistake. The value returned in that
-            case is NOT an address it is a global debug_info offset (ie,
-            not CU-relative offset within the CU in debug_info). The
-            Dwarf document refers to it as an address (misleadingly) in
-            sec 6.5.4 where it describes the reference form. It is
+            case is NOT an address it is a global debug_info
+            offset (ie, not CU-relative offset within the CU
+            in debug_info).
+            The DWARF2 document refers to it as an address
+            (misleadingly) in sec 6.5.4 where it describes
+            the reference form. It is
             address-sized so that the linker can easily update it, but
             it is a reference inside the debug_info section. No longer
             allowed. */
@@ -959,12 +1156,14 @@ dwarf_formaddr(Dwarf_Attribute attr,
             cu_context->cc_address_size,
             error,section_end);
         *return_addr = ret_addr;
-        return (DW_DLV_OK);
+        return DW_DLV_OK;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
-    return (DW_DLV_ERROR);
+    generate_form_error(dbg,error,attrform,
+        DW_DLE_ATTR_FORM_BAD,
+        "DW_DLE_ATTR_FORM_BAD",
+        "dwarf_formaddr");
+    return DW_DLV_ERROR;
 }
-
 
 int
 dwarf_formflag(Dwarf_Attribute attr,
@@ -975,33 +1174,36 @@ dwarf_formflag(Dwarf_Attribute attr,
 
     if (attr == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
 
     cu_context = attr->ar_cu_context;
     if (cu_context == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_NO_CU_CONTEXT);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     dbg = cu_context->cc_dbg;
 
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     if (attr->ar_attribute_form == DW_FORM_flag_present) {
         /*  Implicit means we don't read any data at all. Just
             the existence of the Form does it. DWARF4. */
         *ret_bool = 1;
-        return (DW_DLV_OK);
+        return DW_DLV_OK;
     }
 
     if (attr->ar_attribute_form == DW_FORM_flag) {
         *ret_bool = *(Dwarf_Small *)(attr->ar_debug_ptr);
-        return (DW_DLV_OK);
+        return DW_DLV_OK;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
-    return (DW_DLV_ERROR);
+    generate_form_error(dbg,error,attr->ar_attribute_form,
+        DW_DLE_ATTR_FORM_BAD,
+        "DW_DLE_ATTR_FORM_BAD",
+        "dwarf_formflat");
+    return DW_DLV_ERROR;
 }
 
 Dwarf_Bool
@@ -1014,6 +1216,7 @@ _dwarf_allow_formudata(unsigned form)
     case DW_FORM_data8:
     case DW_FORM_udata:
     case DW_FORM_loclistx:
+    case DW_FORM_rnglistx:
     return TRUE;
     }
     return FALSE;
@@ -1023,10 +1226,18 @@ _dwarf_allow_formudata(unsigned form)
     in the Dwarf_Error is  DW_DLE_MISSING_NEEDED_DEBUG_ADDR_SECTION.
     When that arises, a consumer should call
     dwarf_get_debug_addr_index() and use that on the appropriate
-    .debug_addr section in the executable or another object. */
+    .debug_addr section in the executable or another object.
+
+    Since this accept some signed values, callers
+    must not assume a DW_DLV_OK means
+    the value is unsigned. The form is the first clue here.
+    If DW_FORM_sdata, then signed. Else unknown sign or
+    is unsigned.
+*/
 
 int
 _dwarf_formudata_internal(Dwarf_Debug dbg,
+    Dwarf_Attribute attr,
     unsigned form,
     Dwarf_Byte_Ptr data,
     Dwarf_Byte_Ptr section_end,
@@ -1079,24 +1290,41 @@ _dwarf_formudata_internal(Dwarf_Debug dbg,
         break;
     /* real udata */
     case DW_FORM_loclistx:
+    case DW_FORM_rnglistx:
     case DW_FORM_udata: {
-        Dwarf_Word leblen = 0;
+        Dwarf_Unsigned leblen = 0;
         DECODE_LEB128_UWORD_LEN_CK(data, ret_value,leblen,
             dbg,error,section_end);
         *return_uval = ret_value;
         *bytes_read = leblen;
         return DW_DLV_OK;
     }
-
-        /*  IRIX bug 583450. We do not allow reading sdata from a udata
-            value. Caller can retry, calling sdata */
-
-
+    /*  IRIX bug 583450. We do not allow reading
+        sdata from a udata
+        value. Caller can retry, calling sdata */
     default:
         break;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
-    return (DW_DLV_ERROR);
+    if (attr) {
+        int res = 0;
+        Dwarf_Signed s = 0;
+        res = dwarf_formsdata(attr,&s,error);
+        if (res != DW_DLV_OK) {
+            return res;
+        }
+        if (s < 0 ) {
+            _dwarf_error(dbg, error, DW_DLE_UDATA_VALUE_NEGATIVE);
+            return DW_DLV_ERROR;
+        }
+        *return_uval = (Dwarf_Unsigned)s;
+        *bytes_read = 0;
+        return DW_DLV_OK;
+    }
+    generate_form_error(dbg,error,form,
+        DW_DLE_ATTR_FORM_BAD,
+        "DW_DLE_ATTR_FORM_BAD",
+        "formudata (internal function)");
+    return DW_DLV_ERROR;
 }
 
 int
@@ -1119,11 +1347,11 @@ dwarf_formudata(Dwarf_Attribute attr,
     form = attr->ar_attribute_form;
 
     res = _dwarf_formudata_internal(dbg,
+        attr,
         form, data, section_end, return_uval,
         &bytes_read, error);
     return res;
 }
-
 
 int
 dwarf_formsdata(Dwarf_Attribute attr,
@@ -1205,32 +1433,31 @@ dwarf_formsdata(Dwarf_Attribute attr,
     default:
         break;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
+    generate_form_error(dbg,error,attr->ar_attribute_form,
+        DW_DLE_ATTR_FORM_BAD,
+        "DW_DLE_ATTR_FORM_BAD",
+        "dwarf_formsdata");
     return DW_DLV_ERROR;
 }
 
-
 int
-dwarf_formblock(Dwarf_Attribute attr,
-    Dwarf_Block ** return_block, Dwarf_Error * error)
+_dwarf_formblock_internal(Dwarf_Debug dbg,
+    Dwarf_Attribute attr,
+    Dwarf_CU_Context cu_context,
+    Dwarf_Block * return_block,
+    Dwarf_Error * error)
 {
-    Dwarf_CU_Context cu_context = 0;
-    Dwarf_Debug dbg = 0;
-    Dwarf_Unsigned length = 0;
-    Dwarf_Small *data = 0;
-    Dwarf_Block *ret_block = 0;
     Dwarf_Small *section_start = 0;
     Dwarf_Small *section_end = 0;
     Dwarf_Unsigned section_length = 0;
+    Dwarf_Unsigned length = 0;
+    Dwarf_Small *data = 0;
 
-    int res  = get_attr_dbg(&dbg,&cu_context,attr,error);
-    if (res != DW_DLV_OK) {
-        return res;
-    }
     section_end =
         _dwarf_calculate_info_section_end_ptr(cu_context);
     section_start =
-        _dwarf_calculate_info_section_start_ptr(cu_context,&section_length);
+        _dwarf_calculate_info_section_start_ptr(cu_context,
+        &section_length);
 
     switch (attr->ar_attribute_form) {
 
@@ -1253,9 +1480,10 @@ dwarf_formblock(Dwarf_Attribute attr,
         data = attr->ar_debug_ptr + DWARF_32BIT_SIZE;
         break;
 
+    case DW_FORM_exprloc:
     case DW_FORM_block: {
         Dwarf_Byte_Ptr tmp = attr->ar_debug_ptr;
-        Dwarf_Word leblen = 0;
+        Dwarf_Unsigned leblen = 0;
 
         DECODE_LEB128_UWORD_LEN_CK(tmp, length, leblen,
             dbg,error,section_end);
@@ -1263,120 +1491,206 @@ dwarf_formblock(Dwarf_Attribute attr,
         break;
         }
     default:
-        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
-        return (DW_DLV_ERROR);
+        generate_form_error(dbg,error,attr->ar_attribute_form,
+            DW_DLE_ATTR_FORM_BAD,
+            "DW_DLE_ATTR_FORM_BAD",
+            "dwarf_formblock");
+        return DW_DLV_ERROR;
     }
-
+    /*  We have the data. Check for errors. */
     if (length >= section_length) {
         /*  Sanity test looking for wraparound:
             when length actually added in
             it would not be caught.
             Test could be just >, but >= ok here too.*/
-        _dwarf_error(dbg, error, DW_DLE_FORM_BLOCK_LENGTH_ERROR);
-        return (DW_DLV_ERROR);
+        _dwarf_error_string(dbg, error,
+            DW_DLE_FORM_BLOCK_LENGTH_ERROR,
+            "DW_DLE_FORM_BLOCK_LENGTH_ERROR: "
+            "The length of the block is greater "
+            "than the section length! Corrupt Dwarf.");
+        return DW_DLV_ERROR;
     }
     if ((attr->ar_debug_ptr + length) > section_end) {
-        _dwarf_error(dbg, error, DW_DLE_FORM_BLOCK_LENGTH_ERROR);
-        return (DW_DLV_ERROR);
+        _dwarf_error_string(dbg, error,
+            DW_DLE_FORM_BLOCK_LENGTH_ERROR,
+            "DW_DLE_FORM_BLOCK_LENGTH_ERROR: "
+            "The block length means the block "
+            "runs off the end of the section length!"
+            " Corrupt Dwarf.");
+        return DW_DLV_ERROR;
     }
     if (data > section_end) {
+        _dwarf_error_string(dbg, error,
+            DW_DLE_FORM_BLOCK_LENGTH_ERROR,
+            "DW_DLE_FORM_BLOCK_LENGTH_ERROR: "
+            "The block content is "
+            "past the end of the section!"
+            " Corrupt Dwarf.");
         _dwarf_error(dbg, error, DW_DLE_FORM_BLOCK_LENGTH_ERROR);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     if ((data + length) > section_end) {
-        _dwarf_error(dbg, error, DW_DLE_FORM_BLOCK_LENGTH_ERROR);
-        return (DW_DLV_ERROR);
+        _dwarf_error_string(dbg, error,
+            DW_DLE_FORM_BLOCK_LENGTH_ERROR,
+            "DW_DLE_FORM_BLOCK_LENGTH_ERROR: "
+            "The end of the block content is "
+            "past the end of the section!"
+            " Corrupt Dwarf.");
+        return DW_DLV_ERROR;
     }
+    return_block->bl_len = length;
+    return_block->bl_data = data;
+    /*  This struct is public so use the old name instead
+        of what we now would call it:  bl_kind  */
+    return_block->bl_from_loclist =  DW_LKIND_expression;
+    return_block->bl_section_offset =  data - section_start;
+    return DW_DLV_OK;
+}
 
-    ret_block = (Dwarf_Block *) _dwarf_get_alloc(dbg, DW_DLA_BLOCK, 1);
-    if (ret_block == NULL) {
+int
+dwarf_formblock(Dwarf_Attribute attr,
+    Dwarf_Block ** return_block, Dwarf_Error * error)
+{
+    Dwarf_CU_Context cu_context = 0;
+    Dwarf_Debug dbg = 0;
+    Dwarf_Block local_block;
+    Dwarf_Block *out_block = 0;
+    int res = 0;
+
+    memset(&local_block,0,sizeof(local_block));
+    res  = get_attr_dbg(&dbg,&cu_context,attr,error);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    res = _dwarf_formblock_internal(dbg,attr,
+        cu_context, &local_block, error);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    out_block = (Dwarf_Block *)
+        _dwarf_get_alloc(dbg, DW_DLA_BLOCK, 1);
+    if (out_block == NULL) {
         _dwarf_error(dbg, error, DW_DLE_ALLOC_FAIL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
-
-    ret_block->bl_len = length;
-    ret_block->bl_data = (Dwarf_Ptr) data;
-    ret_block->bl_from_loclist = 0;
-    ret_block->bl_section_offset = data - section_start;
-
-
-    *return_block = ret_block;
-    return (DW_DLV_OK);
+    *out_block = local_block;
+    *return_block = out_block;
+    return DW_DLV_OK;
 }
 
 int
 _dwarf_extract_string_offset_via_str_offsets(Dwarf_Debug dbg,
     Dwarf_Small *data_ptr,
     Dwarf_Small *end_data_ptr,
-    UNUSEDARG Dwarf_Half   attrnum,
+    Dwarf_Half   attrnum UNUSEDARG,
     Dwarf_Half   attrform,
     Dwarf_CU_Context cu_context,
     Dwarf_Unsigned *str_sect_offset_out,
     Dwarf_Error *error)
 {
-    Dwarf_Unsigned offset_base = 0;
     Dwarf_Unsigned index_to_offset_entry = 0;
     Dwarf_Unsigned offsetintable = 0;
     Dwarf_Unsigned end_offsetintable = 0;
+    Dwarf_Unsigned indexoffset = 0;
+    Dwarf_Unsigned baseoffset = 0;
     int res = 0;
     int idxres = 0;
+    Dwarf_Small *sof_start = 0;
+    Dwarf_Unsigned sof_len = 0;
+    Dwarf_Small   *sof_end = 0;
 
     res = _dwarf_load_section(dbg, &dbg->de_debug_str_offsets,error);
     if (res != DW_DLV_OK) {
         return res;
     }
+    /*  If this is a dwp we look there, but I suppose
+        we could also look for the section in the tied
+        file it is not here. */
+    sof_start = dbg->de_debug_str_offsets.dss_data;
+    sof_len = dbg->de_debug_str_offsets.dss_size;
+    sof_end = sof_start+sof_len;
     idxres = dw_read_index_val_itself(dbg,
         attrform,data_ptr,end_data_ptr,&index_to_offset_entry,error);
     if ( idxres != DW_DLV_OK) {
         return idxres;
     }
 
-    /*  DW_FORM_GNU_str_index has no 'base' value.
-        DW_FORM_strx* has a base value
-        for the offset table */
-    if( attrform != DW_FORM_GNU_str_index) {
-        res = _dwarf_get_string_base_attr_value(dbg,cu_context,
-            &offset_base,error);
-        if (res != DW_DLV_OK) {
-            /*  DW_DLV_NO_ENTRY could be acceptable when
-                a producer knows that the base offset will be zero.
-                Hence DW_AT_str_offsets_base missing.
-                DWARF5 draft as of September 2015 allows the attribute
-                to be missing (it's up to the compilation tools to
-                make sure that has the correct effect).
-            */
-            return res;
+    if (cu_context->cc_str_offsets_base_present) {
+        baseoffset = cu_context->cc_str_offsets_base;
+    }
+    indexoffset = index_to_offset_entry*
+        cu_context->cc_length_size;
+    baseoffset = cu_context->cc_str_offsets_base;
+    if (!baseoffset) {
+        if (cu_context->cc_version_stamp ==  DW_CU_VERSION5 ) {
+            /*  A base offset of 0 isnormally never correct for
+                DWARF5. but some early GNU compilers emitted
+                DWARF4 .debug_str_offsets, so lets check
+                the first table.  */
+            Dwarf_Small * ststart =
+                dbg->de_debug_str_offsets.dss_data;
+            Dwarf_Small * stend = 0;
+            Dwarf_Unsigned  stsize =
+                dbg->de_debug_str_offsets.dss_size;
+            Dwarf_Unsigned length            = 0;
+            Dwarf_Half local_offset_size = 0;
+            Dwarf_Half local_extension_size = 0;
+            Dwarf_Half version               = 0;
+            Dwarf_Half padding               = 0;
+
+            stend = ststart + stsize;
+            res = _dwarf_trial_read_dwarf_five_hdr(dbg,
+                ststart,stsize,stend,
+                &length, &local_offset_size,
+                &local_extension_size,
+                &version,
+                &padding,
+                error);
+            if (res == DW_DLV_OK) {
+                baseoffset = local_extension_size +
+                    local_offset_size +
+                    2*DWARF_HALF_SIZE;
+            } else {
+                if (res == DW_DLV_ERROR) {
+                    dwarf_dealloc_error(dbg,*error);
+                    *error = 0;
+                }
+            }
         }
     }
-
-    offsetintable = (index_to_offset_entry*cu_context->cc_length_size )
-        + offset_base;
-    {
-        Dwarf_Unsigned fissoff = 0;
-        Dwarf_Unsigned size = 0;
-        fissoff = _dwarf_get_dwp_extra_offset(&cu_context->cc_dwp_offsets,
-            DW_SECT_STR_OFFSETS, &size);
-        offsetintable += fissoff;
-    }
-    end_offsetintable = offsetintable + cu_context->cc_length_size;
+    offsetintable = baseoffset +indexoffset;
+    end_offsetintable = offsetintable +
+        cu_context->cc_str_offsets_offset_size;
     /*  The offsets table is a series of offset-size entries.
         The == case in the test applies when we are at the last table
         entry, so == is not an error, hence only test >
     */
     if (end_offsetintable > dbg->de_debug_str_offsets.dss_size ) {
-        _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_SIZE_BAD);
-        return (DW_DLV_ERROR);
+        dwarfstring m;
+
+        dwarfstring_constructor(&m);
+        dwarfstring_append_printf_u(&m,
+            "DW_DLE_ATTR_FORM_SIZE_BAD: The end offset of "
+            "a .debug_str_offsets table is 0x%x ",
+            end_offsetintable);
+        dwarfstring_append_printf_u(&m,
+            "but the object section is just 0x%x "
+            "bytes long",
+            dbg->de_debug_str_offsets.dss_size);
+        _dwarf_error_string(dbg, error,
+            DW_DLE_ATTR_FORM_SIZE_BAD,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+        return DW_DLV_ERROR;
     }
 
     {
-        Dwarf_Unsigned offsettostr = 0;
-        Dwarf_Small *offsets_start = dbg->de_debug_str_offsets.dss_data;
-        Dwarf_Small *offsets_end   = offsets_start +
-            dbg->de_debug_str_offsets.dss_size;
+        Dwarf_Unsigned offsettostr = baseoffset+offsetintable;
+
         /* Now read the string offset from the offset table. */
         READ_UNALIGNED_CK(dbg,offsettostr,Dwarf_Unsigned,
-            offsets_start+ offsetintable,
-            cu_context->cc_length_size,error,offsets_end);
+            sof_start+ offsetintable,
+            cu_context->cc_length_size,error,sof_end);
         *str_sect_offset_out = offsettostr;
     }
     return DW_DLV_OK;
@@ -1404,17 +1718,21 @@ _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
         Dwarf_Small   *strbegin = 0;
         Dwarf_Unsigned secsize = 0;
         int errcode = 0;
+        const char *errname = 0;
         int res = 0;
 
-        if(attrform == DW_FORM_line_strp) {
-            res = _dwarf_load_section(dbg, &dbg->de_debug_line_str,error);
+        if (attrform == DW_FORM_line_strp) {
+            res = _dwarf_load_section(dbg,
+                &dbg->de_debug_line_str,error);
             if (res != DW_DLV_OK) {
                 return res;
             }
             errcode = DW_DLE_STRP_OFFSET_BAD;
+            errname = "DW_DLE_STRP_OFFSET_BAD";
             secsize = dbg->de_debug_line_str.dss_size;
             secbegin = dbg->de_debug_line_str.dss_data;
             strbegin= dbg->de_debug_line_str.dss_data + offset;
+            secend = dbg->de_debug_line_str.dss_data + secsize;
         } else {
             /* DW_FORM_strp  etc */
             res = _dwarf_load_section(dbg, &dbg->de_debug_str,error);
@@ -1422,15 +1740,34 @@ _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
                 return res;
             }
             errcode = DW_DLE_STRING_OFFSET_BAD;
+            errname = "DW_DLE_STRING_OFFSET_BAD";
             secsize = dbg->de_debug_str.dss_size;
             secbegin = dbg->de_debug_str.dss_data;
             strbegin= dbg->de_debug_str.dss_data + offset;
             secend = dbg->de_debug_str.dss_data + secsize;
         }
         if (offset >= secsize) {
+            dwarfstring m;
+            const char *name = "<unknownform>";
+
+            dwarf_get_FORM_name(attrform,&name);
+
+            dwarfstring_constructor(&m);
+            dwarfstring_append(&m,(char *)errname);
+            dwarfstring_append_printf_s(&m,
+                " Form %s ",(char *)name);
+            dwarfstring_append_printf_u(&m,
+                "string offset of 0x%" DW_PR_DUx " ",
+                offset);
+            dwarfstring_append_printf_u(&m,
+                "is larger than the string section "
+                "size of  0x%" DW_PR_DUx,
+                secsize);
+            _dwarf_error_string(dbg, error, errcode,
+                dwarfstring_string(&m));
+            dwarfstring_destructor(&m);
             /*  Badly damaged DWARF here. */
-            _dwarf_error(dbg, error, errcode);
-            return (DW_DLV_ERROR);
+            return DW_DLV_ERROR;
         }
         res= _dwarf_check_string_valid(dbg,secbegin,strbegin, secend,
             errcode,error);
@@ -1441,8 +1778,11 @@ _dwarf_extract_local_debug_str_string_given_offset(Dwarf_Debug dbg,
         *return_str = (char *)strbegin;
         return DW_DLV_OK;
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_FORM_BAD);
-    return (DW_DLV_ERROR);
+    generate_form_error(dbg,error,attrform,
+        DW_DLE_ATTR_FORM_BAD,
+        "DW_DLE_ATTR_FORM_BAD",
+        "extract debug_str string");
+    return DW_DLV_ERROR;
 }
 
 /* Contrary to pre-2005 documentation,
@@ -1499,6 +1839,7 @@ dwarf_formstring(Dwarf_Attribute attr,
     case DW_FORM_GNU_strp_alt:
     case DW_FORM_strp_sup:  {
         Dwarf_Error alterr = 0;
+        Dwarf_Bool is_info = TRUE;
         /*  See dwarfstd.org issue 120604.1
             This is the offset in the .debug_str section
             of another object file.
@@ -1508,16 +1849,19 @@ dwarf_formstring(Dwarf_Attribute attr,
             (hence two 'tied' files simultaneously). */
         Dwarf_Off soffset = 0;
 
-        res = dwarf_global_formref(attr, &soffset,error);
+        res = dwarf_global_formref_b(attr, &soffset,
+            &is_info,error);
         if (res != DW_DLV_OK) {
             return res;
         }
         res = _dwarf_get_string_from_tied(dbg, soffset,
             return_str, &alterr);
         if (res == DW_DLV_ERROR) {
-            if (dwarf_errno(alterr) == DW_DLE_NO_TIED_FILE_AVAILABLE) {
+            if (dwarf_errno(alterr) ==
+                DW_DLE_NO_TIED_FILE_AVAILABLE) {
                 dwarf_dealloc(dbg,alterr,DW_DLA_ERROR);
-                if( attr->ar_attribute_form == DW_FORM_GNU_strp_alt) {
+                if ( attr->ar_attribute_form ==
+                    DW_FORM_GNU_strp_alt) {
                     *return_str =
                         (char *)"<DW_FORM_GNU_strp_alt-no-tied-file>";
                 } else {
@@ -1528,11 +1872,14 @@ dwarf_formstring(Dwarf_Attribute attr,
             }
             if (error) {
                 *error = alterr;
+            } else {
+                dwarf_dealloc_error(dbg,alterr);
+                alterr = 0;
             }
             return res;
         }
         if (res == DW_DLV_NO_ENTRY) {
-            if( attr->ar_attribute_form == DW_FORM_GNU_strp_alt) {
+            if ( attr->ar_attribute_form == DW_FORM_GNU_strp_alt) {
                 *return_str =
                     (char *)"<DW_FORM_GNU_strp_alt-no-tied-file>";
             }else {
@@ -1549,6 +1896,7 @@ dwarf_formstring(Dwarf_Attribute attr,
     case DW_FORM_strx3:
     case DW_FORM_strx4: {
         Dwarf_Unsigned offsettostr= 0;
+
         res = _dwarf_extract_string_offset_via_str_offsets(dbg,
             infoptr,
             secend,
@@ -1584,7 +1932,6 @@ dwarf_formstring(Dwarf_Attribute attr,
     return res;
 }
 
-
 int
 _dwarf_get_string_from_tied(Dwarf_Debug dbg,
     Dwarf_Unsigned offset,
@@ -1605,7 +1952,8 @@ _dwarf_get_string_from_tied(Dwarf_Debug dbg,
         return  DW_DLV_ERROR;
     }
     /* The 'offset' into .debug_str is set. */
-    res = _dwarf_load_section(tieddbg, &tieddbg->de_debug_str,&localerror);
+    res = _dwarf_load_section(tieddbg, &tieddbg->de_debug_str,
+        &localerror);
     if (res == DW_DLV_ERROR) {
         Dwarf_Unsigned lerrno = dwarf_errno(localerror);
         dwarf_dealloc(tieddbg,localerror,DW_DLA_ERROR);
@@ -1617,7 +1965,7 @@ _dwarf_get_string_from_tied(Dwarf_Debug dbg,
     if (offset >= tieddbg->de_debug_str.dss_size) {
         /*  Badly damaged DWARF here. */
         _dwarf_error(dbg, error,  DW_DLE_NO_TIED_STRING_AVAILABLE);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     secbegin = tieddbg->de_debug_str.dss_data;
     strbegin= tieddbg->de_debug_str.dss_data + offset;
@@ -1627,7 +1975,7 @@ _dwarf_get_string_from_tied(Dwarf_Debug dbg,
     /*  Ensure the offset lies within the .debug_str */
     if (offset >= tieddbg->de_debug_str.dss_size) {
         _dwarf_error(dbg, error,  DW_DLE_NO_TIED_STRING_AVAILABLE);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     res= _dwarf_check_string_valid(tieddbg,secbegin,strbegin, secend,
         DW_DLE_NO_TIED_STRING_AVAILABLE,
@@ -1644,9 +1992,6 @@ _dwarf_get_string_from_tied(Dwarf_Debug dbg,
     return DW_DLV_OK;
 }
 
-
-
-
 int
 dwarf_formexprloc(Dwarf_Attribute attr,
     Dwarf_Unsigned * return_exprlen,
@@ -1662,11 +2007,11 @@ dwarf_formexprloc(Dwarf_Attribute attr,
     }
     if (dbg == NULL) {
         _dwarf_error(NULL, error, DW_DLE_ATTR_DBG_NULL);
-        return (DW_DLV_ERROR);
+        return DW_DLV_ERROR;
     }
     if (attr->ar_attribute_form == DW_FORM_exprloc ) {
         Dwarf_Die die = 0;
-        Dwarf_Word leb_len = 0;
+        Dwarf_Unsigned leb_len = 0;
         Dwarf_Byte_Ptr section_start = 0;
         Dwarf_Unsigned section_len = 0;
         Dwarf_Byte_Ptr section_end = 0;
@@ -1676,14 +2021,27 @@ dwarf_formexprloc(Dwarf_Attribute attr,
 
         info_ptr = addr;
         section_start =
-            _dwarf_calculate_info_section_start_ptr(cu_context,&section_len);
+            _dwarf_calculate_info_section_start_ptr(cu_context,
+            &section_len);
         section_end = section_start + section_len;
 
         DECODE_LEB128_UWORD_LEN_CK(info_ptr, exprlen, leb_len,
             dbg,error,section_end);
         if (exprlen > section_len) {
             /* Corrupted dwarf!  */
-            _dwarf_error(dbg, error,DW_DLE_ATTR_OUTSIDE_SECTION);
+            dwarfstring m;
+
+            dwarfstring_constructor(&m);
+            dwarfstring_append_printf_u(&m,
+                "DW_DLE_ATTR_OUTSIDE_SECTION: "
+                "The expression length is %u,",exprlen);
+            dwarfstring_append_printf_u(&m,
+                " but the section length is just %u. "
+                "Corrupt Dwarf.",section_len);
+            _dwarf_error_string(dbg, error,
+                DW_DLE_ATTR_OUTSIDE_SECTION,
+                dwarfstring_string(&m));
+            dwarfstring_destructor(&m);
             return DW_DLV_ERROR;
         }
         die = attr->ar_die;
@@ -1691,8 +2049,24 @@ dwarf_formexprloc(Dwarf_Attribute attr,
             there bug somewhere?
             Here the final addr may be 1 past end of section. */
         if (_dwarf_reference_outside_section(die,
-            (Dwarf_Small *)addr, ((Dwarf_Small *)addr)+exprlen +leb_len)) {
-            _dwarf_error(dbg, error,DW_DLE_ATTR_OUTSIDE_SECTION);
+            (Dwarf_Small *)addr,
+            ((Dwarf_Small *)addr)+exprlen +leb_len)) {
+            dwarfstring m;
+
+            dwarfstring_constructor(&m);
+            dwarfstring_append_printf_u(&m,
+                "DW_DLE_ATTR_OUTSIDE_SECTION: "
+                "The expression length %u,",exprlen);
+            dwarfstring_append_printf_u(&m,
+                " plus the leb value length of "
+                "%u ",leb_len);
+            dwarfstring_append(&m,
+                " runs past the end of the section. "
+                "Corrupt Dwarf.");
+            _dwarf_error_string(dbg, error,
+                DW_DLE_ATTR_OUTSIDE_SECTION,
+                dwarfstring_string(&m));
+            dwarfstring_destructor(&m);
             return DW_DLV_ERROR;
         }
         *return_exprlen = exprlen;
@@ -1700,6 +2074,23 @@ dwarf_formexprloc(Dwarf_Attribute attr,
         return DW_DLV_OK;
 
     }
-    _dwarf_error(dbg, error, DW_DLE_ATTR_EXPRLOC_FORM_BAD);
-    return (DW_DLV_ERROR);
+    {
+        dwarfstring m;
+        const char *name = "<name not known>";
+        unsigned  mform = attr->ar_attribute_form;
+
+        dwarfstring_constructor(&m);
+
+        dwarf_get_FORM_name (mform,&name);
+        dwarfstring_append_printf_u(&m,
+            "DW_DLE_ATTR_EXPRLOC_FORM_BAD: "
+            "The form is 0x%x ", mform);
+        dwarfstring_append_printf_s(&m,
+            "(%s) but should be DW_FORM_exprloc. "
+            "Corrupt Dwarf.",(char *)name);
+        _dwarf_error_string(dbg, error, DW_DLE_ATTR_EXPRLOC_FORM_BAD,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+    }
+    return DW_DLV_ERROR;
 }

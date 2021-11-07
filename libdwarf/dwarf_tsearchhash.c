@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, David Anderson
+/* Copyright (c) 2013-2019, David Anderson
 All rights reserved.
 
 Redistribution and use in source and binary forms, with
@@ -30,7 +30,6 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-
 /*  The interfaces follow tsearch (See the Single
     Unix Specification) but the implementation is
     written without reference to the source of any
@@ -57,15 +56,22 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-
 #include "config.h"
-#ifdef HAVE_UNUSED_ATTRIBUTE
-#define  UNUSEDARG __attribute__ ((unused))
-#else
-#define  UNUSEDARG
-#endif
-#include "stdlib.h" /* for free() etc */
-#include <stdio.h>  /* for printf() */
+#ifdef HAVE_STDLIB_H
+#include "stdlib.h" /* for malloc, free() etc */
+#endif /* HAVE_STDLIB_H */
+#ifdef HAVE_MALLOC_H
+/* Useful include for some Windows compilers. */
+#include <malloc.h>
+#endif /* HAVE_MALLOC_H */
+#include <stdio.h> /* for printf() */
+#ifdef HAVE_STDINT_H
+#include <stdint.h> /* for uintptr_t */
+#endif /* HAVE_STDINT_H */
+#include "libdwarf_private.h"
+/*  This must match the types and print options
+    found in libdwarf.h.  */
+#define Dwarf_Unsigned unsigned long long
 #include "dwarf_tsearch.h"
 
 /*  A table of primes used to size  and resize the hash table.
@@ -76,7 +82,7 @@ static unsigned long primes[] =
 {
 #if 0 /* for testing only */
 5,11, 17,23, 31, 47, 53,
-#endif
+#endif /*0*/
 79,
 1009,
 5591,
@@ -101,7 +107,6 @@ static unsigned long primes[] =
 };
 
 static unsigned long allowed_fill_percent = 90;
-
 
 struct hs_base {
     unsigned long tablesize_;
@@ -145,7 +150,6 @@ dwarf_tdestroy_inner(struct hs_base*h,
     void (*free_node)(void *nodep),
     int depth);
 
-
 /*  A trivial integer-based percentage calculation.
     Percents >100 are reasonable for a hash-with-chains
     situation (even if they might not be the best choice
@@ -154,7 +158,7 @@ static unsigned long
 calculate_allowed_fill(unsigned long fill_percent, unsigned long ct)
 {
     unsigned long v = 0;
-    if(ct < 100000) {
+    if (ct < 100000) {
         unsigned long v2 = (ct *fill_percent)/100;
         return v2;
     }
@@ -162,13 +166,16 @@ calculate_allowed_fill(unsigned long fill_percent, unsigned long ct)
     return v;
 }
 
-/* Initialize the hash and pass in the hash function.
-   If the entry count needed is unknown, pass in  0 as a count estimate,
-   but if the number of hash entries needed can be estimated,
-   pass in the estimate (which need not be prime, we actually use
-   the nearest higher prime from the above table).
-   If the estimated count is
-   Return the tree base, or return NULL if insufficient memory. */
+/*  Initialize the hash and pass in the hash function.
+    If the entry count needed is unknown, pass in
+    0 as a count estimate,
+    but if the number of hash entries needed can be estimated,
+    pass in the estimate (which need not be prime,
+    we actually use
+    the nearest higher prime from the above table).
+    If the estimated count is
+    Return the tree base, or return NULL if insufficient
+    memory. */
 void *
 dwarf_initialize_search_hash( void **treeptr,
     DW_TSHASHTYPE(*hashfunc)(const void *key),
@@ -180,12 +187,12 @@ dwarf_initialize_search_hash( void **treeptr,
     struct hs_base *base = 0;
 
     base = *(struct hs_base **)treeptr;
-    if(base) {
+    if (base) {
         /* initalized already. */
         return base ;
     }
     base = calloc(sizeof(struct hs_base),1);
-    if(!base) {
+    if (!base) {
         /* Out of memory. */
         return NULL ;
     }
@@ -193,7 +200,7 @@ dwarf_initialize_search_hash( void **treeptr,
     while(size_estimate && (size_estimate > prime_to_use)) {
         k = k +1;
         prime_to_use = primes[k];
-        if(prime_to_use == 0) {
+        if (prime_to_use == 0) {
             /* Oops. Too large. */
             free(base);
             return NULL;
@@ -203,7 +210,7 @@ dwarf_initialize_search_hash( void **treeptr,
     base->tablesize_ = prime_to_use;
     base->allowed_fill_ = calculate_allowed_fill(allowed_fill_percent,
         prime_to_use);
-    if( base->allowed_fill_< (base->tablesize_/2)) {
+    if (base->allowed_fill_< (base->tablesize_/2)) {
         free(base);
         /* Oops. We are in trouble. Coding mistake here.  */
         return NULL;
@@ -214,7 +221,7 @@ dwarf_initialize_search_hash( void **treeptr,
         indexes 0 through tablesize_ -1. */
     base->hashfunc_ = hashfunc;
     base->hashtab_ = calloc(sizeof(struct ts_entry),base->tablesize_);
-    if(!base->hashtab_) {
+    if (!base->hashtab_) {
         free(base);
         return NULL;
     }
@@ -222,22 +229,24 @@ dwarf_initialize_search_hash( void **treeptr,
     return base;
 }
 
-
+/*  We don't really care whether hashpos or chainpos
+    are 32 or 64 bits. 32 suffices. */
 static void print_entry(struct ts_entry *t,const char *descr,
     char *(* keyprint)(const void *),
     unsigned long hashpos,
     unsigned long chainpos)
 {
     char *v = 0;
-    if(!t->entryused) {
+    if (!t->entryused) {
         return;
     }
     v = keyprint(t->keyptr);
-    printf(
-        "[%4lu.%02lu] 0x%08lx <keyptr 0x%08lx> <key %s> %s\n",
+    printf("[%4lu.%02lu] 0x%08" DW_PR_DUx
+        " <keyptr 0x%08" DW_PR_DUx
+        "> <key %s> %s\n",
         hashpos,chainpos,
-        (unsigned long)t,
-        (unsigned long)t->keyptr,
+        (Dwarf_Unsigned)(uintptr_t)t,
+        (Dwarf_Unsigned)(uintptr_t)t->keyptr,
         v,
         descr);
 }
@@ -254,40 +263,46 @@ dumptree_inner(const struct hs_base *h,
     unsigned long hashused = 0;
     unsigned long maxchainlength = 0;
     unsigned long chainsgt1 = 0;
-    printf("dumptree head ptr : 0x%08lx size %lu entries %lu allowed %lu %s\n",
-        (unsigned long)h,
-        (unsigned long)h->tablesize_,
-        (unsigned long)h->record_count_,
-        (unsigned long)h->allowed_fill_,
+    printf("dumptree head ptr : 0x%08" DW_PR_DUx
+        " size %"    DW_PR_DUu
+        " entries %" DW_PR_DUu
+        " allowed %" DW_PR_DUu " %s\n",
+        (Dwarf_Unsigned)(uintptr_t)h,
+        (Dwarf_Unsigned)h->tablesize_,
+        (Dwarf_Unsigned)h->record_count_,
+        (Dwarf_Unsigned)h->allowed_fill_,
         descr);
-    for(  ; ix < tsize; ix++,p++) {
+    for ( ; ix < tsize; ix++,p++) {
         unsigned long chainlength = 0;
         struct ts_entry*n = 0;
         int chainpos = 0;
-        if(p->entryused) {
+        if (p->entryused) {
             ++hashused;
             chainlength = 1;
-            if(printdetails) {
+            if (printdetails) {
                 print_entry(p,"head",keyprint,ix,chainpos);
             }
         }
         chainpos++;
-        for(n = p->next; n ; n = n->next) {
+        for (n = p->next; n ; n = n->next) {
             chainlength++;
-            if(printdetails) {
+            if (printdetails) {
                 print_entry(n,"chain",keyprint,ix,chainpos);
             }
         }
-        if(chainlength > maxchainlength) {
+        if (chainlength > maxchainlength) {
             maxchainlength = chainlength;
         }
         if (chainlength > 1) {
             chainsgt1++;
         }
     }
-    printf("Hashtable: %lu of %lu hash entries used.\n",hashused,tsize);
-    printf("Hashtable: %lu chains length longer than 1. \n",chainsgt1);
-    printf("Hashtable: %lu is maximum chain length.\n",maxchainlength);
+    printf("Hashtable: %lu of %lu hash entries used.\n",
+        hashused,tsize);
+    printf("Hashtable: %lu chains length longer than 1. \n",
+        chainsgt1);
+    printf("Hashtable: %lu is maximum chain length.\n",
+        maxchainlength);
 }
 
 /*  Dumping the tree.
@@ -298,7 +313,7 @@ dwarf_tdump(const void*headp_in,
     const char *msg)
 {
     const struct hs_base *head = (const struct hs_base *)headp_in;
-    if(!head) {
+    if (!head) {
         printf("dumptree null tree ptr : %s\n",msg);
         return;
     }
@@ -308,9 +323,10 @@ dwarf_tdump(const void*headp_in,
 static struct ts_entry *
 allocate_ts_entry(const void *key)
 {
-    struct ts_entry *e = (struct ts_entry *)
-        malloc(sizeof(struct ts_entry));
-    if(!e) {
+    struct ts_entry *e =  0;
+
+    e = (struct ts_entry *) malloc(sizeof(struct ts_entry));
+    if (!e) {
         return NULL;
     }
     e->keyptr = key;
@@ -334,21 +350,22 @@ resize_table(struct hs_base *head,
     newhead.record_count_ = 0;
     new_entry_index = head->tablesize_entry_index_ +1;
     prime_to_use = primes[new_entry_index];
-    if(prime_to_use == 0) {
+    if (!prime_to_use) {
         /*  Oops, too large. Leave table size as is, though
             it will get slow as it overfills. */
         return;
     }
     newhead.tablesize_ = prime_to_use;
-    newhead.allowed_fill_ = calculate_allowed_fill(allowed_fill_percent,
-        prime_to_use);
-    if( newhead.allowed_fill_< (newhead.tablesize_/2)) {
+    newhead.allowed_fill_ = calculate_allowed_fill(
+        allowed_fill_percent, prime_to_use);
+    if (newhead.allowed_fill_< (newhead.tablesize_/2)) {
         /* Oops. We are in trouble.  */
         return;
     }
     newhead.tablesize_entry_index_ = new_entry_index;
-    newhead.hashtab_ = calloc(sizeof(struct ts_entry),newhead.tablesize_);
-    if(!newhead.hashtab_) {
+    newhead.hashtab_ = calloc(sizeof(struct ts_entry),
+        newhead.tablesize_);
+    if (!newhead.hashtab_) {
         /*  Oops, too large. Leave table size as is, though
             things will get slow as it overfills. */
         free(newhead.hashtab_);
@@ -361,37 +378,37 @@ resize_table(struct hs_base *head,
         unsigned long ix = 0;
         unsigned long tsize = head->tablesize_;
         struct ts_entry *p = &head->hashtab_[0];
-        for(  ; ix < tsize; ix++,p++) {
+        for ( ; ix < tsize; ix++,p++) {
             int inserted = 0;
             struct ts_entry*n = 0;
-            if(fillnewfail) {
+            if (fillnewfail) {
                 break;
             }
-            if(p->keyptr) {
+            if (p->keyptr) {
                 tsearch_inner(p->keyptr,
                     &newhead,compar,
                     want_insert,
                     &inserted,
                     0);
-                if(!inserted) {
+                if (!inserted) {
                     fillnewfail = 1;
                     break;
                 }
             }
-            for(n = p->next; n ; n = n->next) {
+            for (n = p->next; n ; n = n->next) {
                 inserted = 0;
                 tsearch_inner(n->keyptr,
                     &newhead,compar,
                     want_insert,
                     &inserted,
                     0);
-                if(!inserted) {
+                if (!inserted) {
                     fillnewfail = 1;
                     break;
                 }
             }
         }
-        if(fillnewfail) {
+        if (fillnewfail) {
             free(newhead.hashtab_);
             return;
         }
@@ -405,8 +422,7 @@ resize_table(struct hs_base *head,
     return;
 }
 
-/*   Inner search of the hash and synonym chains.
-  */
+/*  Inner search of the hash and synonym chains.  */
 static struct ts_entry *
 tsearch_inner( const void *key, struct hs_base* head,
     int (*compar)(const void *, const void *),
@@ -425,21 +441,21 @@ tsearch_inner( const void *key, struct hs_base* head,
     DW_TSHASHTYPE hindx = 0;
     struct ts_entry *chain_parent = 0;
 
-    if(! head->hashfunc_) {
+    if (! head->hashfunc_) {
         /* Not fully initialized. */
         return NULL;
     }
     keyhash =  head->hashfunc_(key);
     if (intent == want_insert) {
-        if( head->record_count_ > head->allowed_fill_) {
+        if (head->record_count_ > head->allowed_fill_) {
             resize_table(head,compar);
         }
     }
     hindx = keyhash%head->tablesize_;
     s = &head->hashtab_[hindx];
-    if(!s->entryused) {
+    if (!s->entryused) {
         /* Not found. */
-        if(intent != want_insert) {
+        if (intent != want_insert) {
             return NULL;
         }
         /*  Insert in the base hash table in an
@@ -452,26 +468,26 @@ tsearch_inner( const void *key, struct hs_base* head,
         return s;
     }
     kc = compar(key,s->keyptr);
-    if(kc == 0 ) {
+    if (kc == 0 ) {
         /* found! */
-        if(want_delete) {
+        if (want_delete) {
             *owner_ptr = 0;
         }
         return (void *)&(s->keyptr);
     }
     chain_parent = s;
-    for(c = s->next; c; c = c->next)  {
+    for (c = s->next; c; c = c->next)  {
         kc = compar(key,c->keyptr);
-        if(kc == 0 ) {
+        if (kc == 0 ) {
             /* found! */
-            if(want_delete) {
+            if (want_delete) {
                 *owner_ptr = chain_parent;
             }
             return (void *)&(c->keyptr);
         }
         chain_parent = c;
     }
-    if(intent != want_insert) {
+    if (intent != want_insert) {
         return NULL;
     }
     /* Insert following head record of the chain. */
@@ -508,7 +524,6 @@ dwarf_tsearch(const void *key, void **headin,
     return (void *)&(r->keyptr);
 }
 
-
 /* Search. */
 void *
 dwarf_tfind(const void *key, void *const *rootp,
@@ -530,7 +545,7 @@ dwarf_tfind(const void *key, void *const *rootp,
     }
 
     r = tsearch_inner(key,head,compar,only_find,&inserted,&nullme);
-    if(!r) {
+    if (!r) {
         return NULL;
     }
     return (void *)(&(r->keyptr));
@@ -556,8 +571,8 @@ dwarf_tdelete(const void *key, void **rootp,
 
     found = tsearch_inner(key,head,compar,want_delete,&inserted,
         &parentp);
-    if(found) {
-        if(parentp) {
+    if (found) {
+        if (parentp) {
             /* Delete a chain entry. */
             head->record_count_--;
             parentp->next = found->next;
@@ -568,7 +583,7 @@ dwarf_tdelete(const void *key, void **rootp,
             return (void *)&(parentp->keyptr);
         }
         /* So found is the head of a chain. */
-        if(found->next) {
+        if (found->next) {
             /*  Delete a chain entry, pull up to hash tab, freeing
                 up the chain entry. */
             struct ts_entry *pullup = found->next;
@@ -597,17 +612,17 @@ static void
 dwarf_twalk_inner(const struct hs_base *h,
     struct ts_entry *p,
     void (*action)(const void *nodep, const DW_VISIT which,
-        UNUSEDARG const int depth),
-    UNUSEDARG unsigned level)
+        const int depth UNUSEDARG),
+    unsigned level UNUSEDARG)
 {
     unsigned long ix = 0;
     unsigned long tsize = h->tablesize_;
-    for(  ; ix < tsize; ix++,p++) {
+    for ( ; ix < tsize; ix++,p++) {
         struct ts_entry*n = 0;
-        if(p->keyptr) {
+        if (p->keyptr) {
             action((void *)(&(p->keyptr)),dwarf_leaf,level);
         }
-        for(n = p->next; n ; n = n->next) {
+        for (n = p->next; n ; n = n->next) {
             action((void *)(&(n->keyptr)),dwarf_leaf,level);
         }
     }
@@ -616,11 +631,11 @@ dwarf_twalk_inner(const struct hs_base *h,
 void
 dwarf_twalk(const void *rootp,
     void (*action)(const void *nodep, const DW_VISIT which,
-        UNUSEDARG const int depth))
+        const int depth UNUSEDARG))
 {
     const struct hs_base *head = (const struct hs_base *)rootp;
     struct ts_entry *root = 0;
-    if(!head) {
+    if (!head) {
         return;
     }
     root = head->hashtab_;
@@ -631,23 +646,23 @@ dwarf_twalk(const void *rootp,
 static void
 dwarf_tdestroy_inner(struct hs_base*h,
     void (*free_node)(void *nodep),
-    UNUSEDARG int depth)
+    int depth UNUSEDARG)
 {
     unsigned long ix = 0;
     unsigned long tsize = h->tablesize_;
     struct ts_entry *p = &h->hashtab_[0];
-    for(  ; ix < tsize; ix++,p++) {
+    for ( ; ix < tsize; ix++,p++) {
         struct ts_entry*n = 0;
         struct ts_entry*prev = 0;
-        if(p->keyptr && p->entryused) {
-            if(free_node) {
+        if (p->keyptr && p->entryused) {
+            if (free_node) {
                 free_node((void *)(p->keyptr));
             }
             --h->record_count_;
         }
         /* Now walk and free up the chain entries. */
-        for(n = p->next; n ; ) {
-            if(free_node) {
+        for (n = p->next; n ; ) {
+            if (free_node) {
                 free_node((void *)(n->keyptr));
             }
             --h->record_count_;
@@ -670,7 +685,7 @@ dwarf_tdestroy(void *rootp, void (*free_node)(void *nodep))
 {
     struct hs_base *head = (struct hs_base *)rootp;
     struct ts_entry *root = 0;
-    if(!head) {
+    if (!head) {
         return;
     }
     root = head->hashtab_;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 Hannes Domani
+ * Copyright (C) 2013-2021 Hannes Domani
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ static void walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
     walkFunc( dbg,child,context );
 
     Dwarf_Die next_child;
-    int res = dwarf_siblingof( dbg,child,&next_child,NULL );
+    int res = dwarf_siblingof_b( dbg,child,1,&next_child,NULL );
 
     dwarf_dealloc( dbg,child,DW_DLA_DIE );
 
@@ -63,7 +63,8 @@ static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,
   res = dwarf_global_formref( range_attr,&range_off,NULL );
 
   if( res==DW_DLV_OK )
-    res = dwarf_get_ranges_a( dbg,range_off,die,ranges,rangeCount,NULL,NULL );
+    res = dwarf_get_ranges_b( dbg,range_off,die,NULL,
+        ranges,rangeCount,NULL,NULL );
 
   dwarf_dealloc( dbg,range_attr,DW_DLA_ATTR );
 
@@ -103,7 +104,7 @@ static int dwarf_die_by_ref( Dwarf_Debug dbg,Dwarf_Die die,
   Dwarf_Off ref_off;
   res = dwarf_global_formref( ref_attr,&ref_off,NULL );
   if( res==DW_DLV_OK )
-    res = dwarf_offdie( dbg,ref_off,return_die,NULL );
+    res = dwarf_offdie_b( dbg,ref_off,1,return_die,NULL );
 
   dwarf_dealloc( dbg,ref_attr,DW_DLA_ATTR );
 
@@ -286,7 +287,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
       break;
     }
 
-    dwarf_ranges_dealloc( dbg,ranges,rangeCount );
+    dwarf_dealloc_ranges( dbg,ranges,rangeCount );
 
     if( i>=rangeCount ) return;
   }
@@ -356,6 +357,7 @@ typedef struct cu_info
   Dwarf_Addr low,high;
   Dwarf_Line *lines;
   Dwarf_Signed lineCount;
+  Dwarf_Line_Context lineContext;
   char **files;
   Dwarf_Signed fileCount;
 } cu_info;
@@ -391,12 +393,12 @@ int dwstOfFileExt(
   while( 1 )
   {
     Dwarf_Unsigned next_cu_header;
-    if( dwarf_next_cu_header(dbg,NULL,NULL,NULL,NULL,
-          &next_cu_header,NULL)!=DW_DLV_OK )
+    if( dwarf_next_cu_header_d(dbg,1,NULL,NULL,NULL,NULL,NULL,
+          NULL,NULL,NULL,&next_cu_header,NULL,NULL)!=DW_DLV_OK )
       break;
 
     Dwarf_Die die;
-    if( dwarf_siblingof(dbg,0,&die,NULL)!=DW_DLV_OK )
+    if( dwarf_siblingof_b(dbg,0,1,&die,NULL)!=DW_DLV_OK )
       continue;
 
     {
@@ -461,12 +463,13 @@ int dwstOfFileExt(
             cuInfo->high = high;
         }
 
-        dwarf_ranges_dealloc( dbg,ranges,rangeCount );
+        dwarf_dealloc_ranges( dbg,ranges,rangeCount );
       }
     }
 
     cuInfo->lines = NULL;
     cuInfo->lineCount = -1;
+    cuInfo->lineContext = NULL;
     cuInfo->files = NULL;
     cuInfo->fileCount = -1;
 
@@ -494,19 +497,29 @@ int dwstOfFileExt(
 
       Dwarf_Die die;
       if( cuInfo->offs &&
-          dwarf_offdie(dbg,cuArr[j].offs,&die,NULL)==DW_DLV_OK )
+          dwarf_offdie_b(dbg,cuArr[j].offs,1,&die,NULL)==DW_DLV_OK )
       {
         Dwarf_Line *lines = cuInfo->lines;
         Dwarf_Signed lineCount = cuInfo->lineCount;
         if( lineCount<0 )
         {
-          if( dwarf_srclines(die,&lines,&lineCount,NULL)!=DW_DLV_OK )
+          Dwarf_Unsigned lineVersion = 0;
+          Dwarf_Small tableCount = 0;
+          Dwarf_Line_Context lineContext = NULL;
+          if( dwarf_srclines_b(die,&lineVersion,
+                &tableCount,&lineContext,NULL)!=DW_DLV_OK ||
+              tableCount!=1 ||
+              dwarf_srclines_from_linecontext(lineContext,
+                &lines,&lineCount,NULL)!=DW_DLV_OK )
           {
+            dwarf_srclines_dealloc_b( lineContext );
             lines = NULL;
             lineCount = 0;
+            lineContext = NULL;
           }
           cuInfo->lines = lines;
           cuInfo->lineCount = lineCount;
+          cuInfo->lineContext = lineContext;
         }
 
         Dwarf_Unsigned srcfileno = 0;
@@ -584,7 +597,7 @@ int dwstOfFileExt(
   for( j=0; j<cuQty; j++ )
   {
     if( cuArr[j].lines )
-      dwarf_srclines_dealloc( dbg,cuArr[j].lines,cuArr[j].lineCount );
+      dwarf_srclines_dealloc_b( cuArr[j].lineContext );
 
     if( cuArr[j].files )
     {
