@@ -27,6 +27,7 @@ DynamicLibrary {
     cpp.defines: [
         "DWST_SHARED",
         "DW_TSHASHTYPE=uintptr_t",
+        "LIBDWARF_STATIC",
     ]
     cpp.dynamicLibraries: [
         "dbghelp",

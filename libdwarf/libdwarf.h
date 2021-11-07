@@ -40,6 +40,8 @@
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifdef LIBDWARF_BUILD
 #define DW_API __declspec(dllexport)
+#elif defined(LIBDWARF_STATIC)
+#define DW_API
 #else
 #define DW_API __declspec(dllimport)
 #endif /* LIBDWARF_BUILD */
