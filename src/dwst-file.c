@@ -236,6 +236,7 @@ typedef struct inline_info
   void *callbackContext;
   uint64_t ptrOrig;
   int fileno,lineno,columnno;
+  int fileno_offs;
 } inline_info;
 
 // find the calling-location of inlined functions
@@ -297,7 +298,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     char *funcname = dwarf_name_of_func_linked( dbg,die );
 
     dwarf_callback( cuInfo->callbackFunc,cuInfo->callbackFuncW,
-        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno-1],NULL,
+        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno],NULL,
         cuInfo->lineno,funcname,cuInfo->callbackContext,cuInfo->columnno );
 
     if( funcname )
@@ -319,15 +320,16 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
   Dwarf_Unsigned fileno,lineno;
   if( dwarf_formudata(callfile,&fileno,NULL)==DW_DLV_OK &&
       dwarf_formudata(callline,&lineno,NULL)==DW_DLV_OK &&
-      (int)fileno<=cuInfo->fileCount )
+      (int)fileno+cuInfo->fileno_offs>=0 &&
+      (int)fileno+cuInfo->fileno_offs<cuInfo->fileCount )
   {
     char *funcname = dwarf_name_of_func_linked( dbg,die );
 
     dwarf_callback( cuInfo->callbackFunc,cuInfo->callbackFuncW,
-        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno-1],NULL,
+        cuInfo->ptrOrig,cuInfo->files[cuInfo->fileno],NULL,
         cuInfo->lineno,funcname,cuInfo->callbackContext,cuInfo->columnno );
 
-    cuInfo->fileno = fileno;
+    cuInfo->fileno = fileno + cuInfo->fileno_offs;
     cuInfo->lineno = lineno;
     cuInfo->columnno = 0;
     cuInfo->ptrOrig = 0;
@@ -358,6 +360,7 @@ typedef struct cu_info
   Dwarf_Line *lines;
   Dwarf_Signed lineCount;
   Dwarf_Line_Context lineContext;
+  int fileno_offs;
   char **files;
   Dwarf_Signed fileCount;
 } cu_info;
@@ -470,6 +473,7 @@ int dwstOfFileExt(
     cuInfo->lines = NULL;
     cuInfo->lineCount = -1;
     cuInfo->lineContext = NULL;
+    cuInfo->fileno_offs = -1;
     cuInfo->files = NULL;
     cuInfo->fileCount = -1;
 
@@ -520,6 +524,7 @@ int dwstOfFileExt(
           cuInfo->lines = lines;
           cuInfo->lineCount = lineCount;
           cuInfo->lineContext = lineContext;
+          cuInfo->fileno_offs = lineVersion>=5 ? 0 : -1;
         }
 
         Dwarf_Unsigned srcfileno = 0;
@@ -556,7 +561,7 @@ int dwstOfFileExt(
 
         char **files = cuInfo->files;
         Dwarf_Signed fileCount = cuInfo->fileCount;
-        if( srcfileno && lineno && fileCount<0 )
+        if( (int)srcfileno+cuInfo->fileno_offs>=0 && lineno && fileCount<0 )
         {
           if( dwarf_srcfiles(die,&files,&fileCount,NULL)!=DW_DLV_OK )
           {
@@ -567,15 +572,16 @@ int dwstOfFileExt(
           cuInfo->fileCount = fileCount;
         }
 
-        if( srcfileno && lineno && files )
+        if( (int)srcfileno+cuInfo->fileno_offs>=0 && lineno && files )
         {
           found_ptr = 1;
 
-          if( srcfileno<=(Dwarf_Unsigned)fileCount )
+          if( (int)srcfileno+cuInfo->fileno_offs<=fileCount )
           {
             inline_info ii = { ptr,cuInfo->low,
               files,fileCount,callbackFunc,callbackFuncW,callbackContext,
-              ptrOrig,srcfileno,lineno,columnno };
+              ptrOrig,(int)srcfileno+cuInfo->fileno_offs,lineno,columnno,
+              cuInfo->fileno_offs };
             walkChilds( dbg,die,(ChildWalker*)findInlined,&ii );
           }
           else
