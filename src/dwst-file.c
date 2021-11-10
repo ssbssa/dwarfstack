@@ -52,8 +52,9 @@ static void walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
 
 
 // get Dwarf_Ranges of specified DIE
-static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,
-    Dwarf_Ranges **ranges,Dwarf_Signed *rangeCount )
+static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,Dwarf_Half *version,
+    Dwarf_Ranges **ranges,Dwarf_Signed *rangeCount,
+    Dwarf_Rnglists_Head *rnghlhead,Dwarf_Unsigned *rngEntriesCount )
 {
   Dwarf_Attribute range_attr;
   int res = dwarf_attr( die,DW_AT_ranges,&range_attr,NULL );
@@ -61,10 +62,31 @@ static int dwarf_ranges( Dwarf_Debug dbg,Dwarf_Die die,
 
   Dwarf_Off range_off;
   res = dwarf_global_formref( range_attr,&range_off,NULL );
+  if( res!=DW_DLV_OK )
+  {
+    dwarf_dealloc( dbg,range_attr,DW_DLA_ATTR );
+    return( res );
+  }
 
-  if( res==DW_DLV_OK )
-    res = dwarf_get_ranges_b( dbg,range_off,die,NULL,
-        ranges,rangeCount,NULL,NULL );
+  Dwarf_Half offset_size;
+  res = dwarf_get_version_of_die( die,version,&offset_size );
+  if( res!=DW_DLV_OK )
+  {
+    dwarf_dealloc( dbg,range_attr,DW_DLA_ATTR );
+    return( res );
+  }
+
+  if( *version<=4 )
+    res = dwarf_get_ranges_b( dbg,range_off,die,NULL,ranges,rangeCount,
+        NULL,NULL );
+  else
+  {
+    Dwarf_Half theform = 0;
+    Dwarf_Unsigned global_offset_of_rle_set;
+    *rnghlhead = 0;
+    res = dwarf_rnglists_get_rle_head( range_attr,theform,range_off,
+        rnghlhead,rngEntriesCount,&global_offset_of_rle_set,NULL );
+  }
 
   dwarf_dealloc( dbg,range_attr,DW_DLA_ATTR );
 
@@ -256,41 +278,82 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
   }
   else
   {
+    Dwarf_Half version;
     Dwarf_Signed rangeCount;
     Dwarf_Ranges *ranges;
-    if( dwarf_ranges(dbg,die,&ranges,&rangeCount)!=DW_DLV_OK )
+    Dwarf_Rnglists_Head rnghlhead;
+    Dwarf_Unsigned rngEntriesCount;
+    if( dwarf_ranges(dbg,die,&version,&ranges,&rangeCount,
+          &rnghlhead,&rngEntriesCount)!=DW_DLV_OK )
       return;
 
-    int i;
-    Dwarf_Addr base = cuInfo->low;
-    for( i=0; i<rangeCount; i++ )
+    if( version<=4 )
     {
-      Dwarf_Ranges *range = ranges + i;
-      if( range->dwr_type==DW_RANGES_END ) continue;
-
-      low = range->dwr_addr1;
-      high = range->dwr_addr2;
-
-      if( range->dwr_type==DW_RANGES_ENTRY )
+      int i;
+      Dwarf_Addr base = cuInfo->low;
+      for( i=0; i<rangeCount; i++ )
       {
-        low += base;
-        high += base;
-      }
-      else
-      {
-        base = high;
-        continue;
+        Dwarf_Ranges *range = ranges + i;
+        if( range->dwr_type==DW_RANGES_END ) continue;
+
+        low = range->dwr_addr1;
+        high = range->dwr_addr2;
+
+        if( range->dwr_type==DW_RANGES_ENTRY )
+        {
+          low += base;
+          high += base;
+        }
+        else
+        {
+          base = high;
+          continue;
+        }
+
+        if( cuInfo->ptr<low || cuInfo->ptr>=high )
+          continue;
+
+        break;
       }
 
-      if( cuInfo->ptr<low || cuInfo->ptr>=high )
-        continue;
+      dwarf_dealloc_ranges( dbg,ranges,rangeCount );
 
-      break;
+      if( i>=rangeCount ) return;
     }
+    else
+    {
+      unsigned i;
+      for( i=0; i<rngEntriesCount; i++ )
+      {
+        unsigned entrylen = 0;
+        unsigned code = 0;
+        Dwarf_Unsigned rawlowpc = 0;
+        Dwarf_Unsigned rawhighpc = 0;
+        Dwarf_Unsigned lowpc = 0;
+        Dwarf_Unsigned highpc = 0;
+        Dwarf_Bool debug_addr_unavailable = 0;
+        int res = dwarf_get_rnglists_entry_fields_a( rnghlhead,i,
+            &entrylen,&code,&rawlowpc,&rawhighpc,
+            &debug_addr_unavailable,&lowpc,&highpc,NULL );
+        if( res!=DW_DLV_OK || code==DW_RLE_end_of_list )
+        {
+          i = rngEntriesCount;
+          break;
+        }
+        if( code==DW_RLE_base_addressx || code==DW_RLE_base_address ||
+            debug_addr_unavailable )
+          continue;
 
-    dwarf_dealloc_ranges( dbg,ranges,rangeCount );
+        if( cuInfo->ptr<lowpc || cuInfo->ptr>=highpc )
+          continue;
 
-    if( i>=rangeCount ) return;
+        break;
+      }
+
+      dwarf_dealloc_rnglists_head( rnghlhead );
+
+      if( i>=rngEntriesCount ) return;
+    }
   }
 
   if( tag==DW_TAG_subprogram )
@@ -430,43 +493,85 @@ int dwstOfFileExt(
       if( !hasLow ) cuInfo->low = 0;
       cuInfo->high = 0;
 
+      Dwarf_Half version;
       Dwarf_Signed rangeCount;
       Dwarf_Ranges *ranges;
-      if( dwarf_ranges(dbg,die,&ranges,&rangeCount)==DW_DLV_OK )
+      Dwarf_Rnglists_Head rnghlhead;
+      Dwarf_Unsigned rngEntriesCount;
+      if( dwarf_ranges(dbg,die,&version,&ranges,&rangeCount,
+            &rnghlhead,&rngEntriesCount)==DW_DLV_OK )
       {
-        int i;
-        Dwarf_Addr base = 0;
-        for( i=0; i<rangeCount; i++ )
+        if( version<=4 )
         {
-          Dwarf_Ranges *range = ranges + i;
-          if( range->dwr_type==DW_RANGES_END ) continue;
-
-          Dwarf_Addr low = range->dwr_addr1;
-          Dwarf_Addr high = range->dwr_addr2;
-
-          if( range->dwr_type==DW_RANGES_ENTRY )
+          int i;
+          Dwarf_Addr base = 0;
+          for( i=0; i<rangeCount; i++ )
           {
-            low += base;
-            high += base;
-          }
-          else
-          {
-            base = high;
-            continue;
+            Dwarf_Ranges *range = ranges + i;
+            if( range->dwr_type==DW_RANGES_END ) continue;
+
+            Dwarf_Addr low = range->dwr_addr1;
+            Dwarf_Addr high = range->dwr_addr2;
+
+            if( range->dwr_type==DW_RANGES_ENTRY )
+            {
+              low += base;
+              high += base;
+            }
+            else
+            {
+              base = high;
+              continue;
+            }
+
+            if( !low ) continue;
+
+            if( !hasLow || low<cuInfo->low )
+            {
+              cuInfo->low = low;
+              hasLow = 1;
+            }
+            if( high>cuInfo->high )
+              cuInfo->high = high;
           }
 
-          if( !low ) continue;
-
-          if( !hasLow || low<cuInfo->low )
-          {
-            cuInfo->low = low;
-            hasLow = 1;
-          }
-          if( high>cuInfo->high )
-            cuInfo->high = high;
+          dwarf_dealloc_ranges( dbg,ranges,rangeCount );
         }
+        else
+        {
+          unsigned i;
+          for( i=0; i<rngEntriesCount; i++ )
+          {
+            unsigned entrylen = 0;
+            unsigned code = 0;
+            Dwarf_Unsigned rawlowpc = 0;
+            Dwarf_Unsigned rawhighpc = 0;
+            Dwarf_Unsigned lowpc = 0;
+            Dwarf_Unsigned highpc = 0;
+            Dwarf_Bool debug_addr_unavailable = 0;
+            int res = dwarf_get_rnglists_entry_fields_a( rnghlhead,i,
+                &entrylen,&code,&rawlowpc,&rawhighpc,
+                &debug_addr_unavailable,&lowpc,&highpc,NULL );
+            if( res!=DW_DLV_OK || code==DW_RLE_end_of_list )
+            {
+              i = rngEntriesCount;
+              break;
+            }
+            if( code==DW_RLE_base_addressx || code==DW_RLE_base_address ||
+                debug_addr_unavailable )
+              continue;
 
-        dwarf_dealloc_ranges( dbg,ranges,rangeCount );
+            if( !hasLow || lowpc<cuInfo->low )
+            {
+              cuInfo->low = lowpc;
+              hasLow = 1;
+            }
+            if( highpc>cuInfo->high )
+              cuInfo->high = highpc;
+          }
+
+          dwarf_dealloc_rnglists_head( rnghlhead );
+        }
       }
     }
 
