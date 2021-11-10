@@ -171,10 +171,12 @@ install: $(BUILD)
 build32 build64:
 	@mkdir -p $@
 
-build32/bin/dwarfstack.dll: | build32
+FORCE:
+
+build32/bin/dwarfstack.dll: FORCE | build32
 	$(MAKE) -C build32 -f ../Makefile HOSTPREFIX=i686-w64-mingw32- bin/dwarfstack.dll
 
-build64/bin/dwarfstack.dll: | build64
+build64/bin/dwarfstack.dll: FORCE | build64
 	$(MAKE) -C build64 -f ../Makefile HOSTPREFIX=x86_64-w64-mingw32- bin/dwarfstack.dll
 
 build32/dwarfstack-$(DWST_VERSION)-mingw.tar.xz: build32/bin/dwarfstack.dll
