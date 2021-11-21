@@ -240,17 +240,17 @@ dwarf_pe_init_link(const wchar_t *image,
                     (PBYTE)pe_obj->pNtHeaders +
                     sizeof(DWORD) +
                     sizeof(IMAGE_FILE_HEADER) );
-            if (imagebase) *imagebase = opt->ImageBase;
+            *imagebase = opt->ImageBase;
         }
         else if (sooh==sizeof(IMAGE_OPTIONAL_HEADER64)) {
             PIMAGE_OPTIONAL_HEADER64 opt = (PIMAGE_OPTIONAL_HEADER64)(
                     (PBYTE)pe_obj->pNtHeaders +
                     sizeof(DWORD) +
                     sizeof(IMAGE_FILE_HEADER) );
-            if (imagebase) *imagebase = opt->ImageBase;
+            *imagebase = opt->ImageBase;
         }
         else {
-            if (imagebase) *imagebase = 0;
+            *imagebase = 0;
         }
     }
 
