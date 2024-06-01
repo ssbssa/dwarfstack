@@ -8,6 +8,7 @@ CC = $(HOSTPREFIX)gcc
 AR = $(HOSTPREFIX)ar
 CPPFLAGS = -DNO_DBGHELP -DLIBDWARF_STATIC
 OPT = -O3
+LDFLAGS = -s
 FRAME_POINTER = -fno-omit-frame-pointer -fno-optimize-sibling-calls
 INCLUDE = -I$(SRC_DIR)libdwarf -I$(SRC_DIR)mgwhelp -I$(SRC_DIR)include
 WARN = -Wall -Wextra -Wno-implicit-fallthrough
@@ -148,7 +149,7 @@ lib/libdwarfstack.a: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
 	$(CC) -c $(CFLAGS_SHARED) -o $@ $<
 
 bin/dwarfstack.dll: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
-	$(CC) -s -shared -o $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
+	$(CC) $(LDFLAGS) -shared -o $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
 
 lib/libdwarfstack.dll.a: bin/dwarfstack.dll
 
