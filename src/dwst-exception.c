@@ -55,11 +55,21 @@ int captureStackTrace( ULONG_PTR *frameAddr,uintptr_t *frames,int size )
 // cip ... current instruction pointer
 // cfp ... current frame pointer
 #ifdef _WIN64
+#if defined(__aarch64__) || defined(_M_ARM64)
+// Defaults to ARM64
+#define csp Sp
+#define cip Pc
+#define cfp Fp
+#define MACH_TYPE IMAGE_FILE_MACHINE_ARM64
+#else
+// Defaults to AMD64
 #define csp Rsp
 #define cip Rip
 #define cfp Rbp
 #define MACH_TYPE IMAGE_FILE_MACHINE_AMD64
+#endif
 #else
+// Defaults to i386
 #define csp Esp
 #define cip Eip
 #define cfp Ebp
