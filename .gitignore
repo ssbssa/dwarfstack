@@ -2,6 +2,7 @@
 /lib
 /build32
 /build64
+/build64a
 /share
 /*.user
 *.swp
