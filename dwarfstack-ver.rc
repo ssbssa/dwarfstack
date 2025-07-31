@@ -1,0 +1,34 @@
+
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+#ifdef DWST_VER_NUM
+FILEVERSION DWST_VER_NUM
+PRODUCTVERSION DWST_VER_NUM
+#endif
+#if defined(DWST_PRERELEASE) && DWST_PRERELEASE
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS VS_FF_PRERELEASE
+#endif
+FILEOS VOS__WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "FileDescription", "dwarfstack"
+#ifdef DWST_COPYRIGHT_YEARS
+      VALUE "LegalCopyright",  "Copyright \251 " DWST_COPYRIGHT_YEARS " Hannes Domani"
+#endif
+      VALUE "ProductName",     "dwarfstack"
+#ifdef DWST_VER_STR
+      VALUE "ProductVersion",  DWST_VER_STR
+#endif
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1252
+  END
+END

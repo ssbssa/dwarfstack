@@ -1,11 +1,15 @@
 
 DWST_VERSION = 2.3-git
+DWST_VER_NUM = 2,3,0,99
+DWST_PRERELEASE = 1
+DWST_COPYRIGHT_YEARS = 2013-2025
 
 SRC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 HOSTPREFIX =
 CC = $(HOSTPREFIX)gcc
 AR = $(HOSTPREFIX)ar
+WINDRES = $(HOSTPREFIX)windres
 CPPFLAGS = -DNO_DBGHELP -DLIBDWARF_STATIC
 OPT = -O3
 LDFLAGS = -s
@@ -93,7 +97,7 @@ DWST_HEADER_REL = dwarfstack.h \
 
 DWST_SRC = $(patsubst %,src/%,$(DWST_SRC_REL))
 DWST_OBJ = $(patsubst %.c,%.o,$(DWST_SRC))
-DWST_DLL_OBJ = $(patsubst %.c,%.dll.o,$(DWST_SRC))
+DWST_DLL_OBJ = $(patsubst %.c,%.dll.o,$(DWST_SRC)) dwarfstack-ver.o
 
 
 INC = include/dwarfstack.h
@@ -113,6 +117,7 @@ src libdwarf mgwhelp zlib include lib bin:
 ifneq ($(SRC_DIR),./)
 
 vpath %.c $(SRC_DIR)
+vpath %.rc $(SRC_DIR)
 
 $(DWST_OBJ) $(DWST_DLL_OBJ) : | src
 $(DWARF_OBJ) : | libdwarf
@@ -147,6 +152,9 @@ lib/libdwarfstack.a: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_OBJ) | lib
 # shared library
 .c.dll.o:
 	$(CC) -c $(CFLAGS_SHARED) -o $@ $<
+
+dwarfstack-ver.o: dwarfstack-ver.rc $(lastword $(MAKEFILE_LIST))
+	$(WINDRES) -DDWST_VER_STR=\\\"$(DWST_VERSION)\\\" -DDWST_VER_NUM=$(DWST_VER_NUM) -DDWST_PRERELEASE=$(DWST_PRERELEASE) -DDWST_COPYRIGHT_YEARS=\\\"$(DWST_COPYRIGHT_YEARS)\\\" $< $@
 
 bin/dwarfstack.dll: $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) | lib bin
 	$(CC) $(LDFLAGS) -shared -o $@ $(DWARF_OBJ) $(ZLIB_OBJ) $(DWARF_PE_OBJ) $(DWST_DLL_OBJ) -ldbghelp -Wl,--out-implib,lib/libdwarfstack.dll.a -lgdi32 -lstdc++
