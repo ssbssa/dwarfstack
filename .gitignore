@@ -12,3 +12,7 @@
 *.a
 *.tar.xz
 *.7z
+/.cache
+compile_commands.json
+CMakeUserPresets.json
+/.vscode
