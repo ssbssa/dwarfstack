@@ -95,3 +95,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     PUBLIC
     include
 )
+
+add_executable(a2l examples/addr2line/a2l.c)
+target_link_libraries(a2l PRIVATE ${TARGET_NAME})
+target_link_options(a2l PRIVATE -municode)
