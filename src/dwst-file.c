@@ -415,6 +415,11 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
   dwarf_dealloc( dbg,callline,DW_DLA_ATTR );
 }
 
+typedef struct range_t
+{
+  Dwarf_Addr low;
+  Dwarf_Addr high;
+} range_t;
 
 typedef struct cu_info
 {
@@ -426,6 +431,8 @@ typedef struct cu_info
   int fileno_offs;
   char **files;
   Dwarf_Signed fileCount;
+  range_t *ranges;
+  int rangeCount;
 } cu_info;
 
 int dwstOfFileExt(
@@ -483,6 +490,11 @@ int dwstOfFileExt(
     if( dwarf_dieoffset(die,&cuInfo->offs,NULL)!=DW_DLV_OK )
       cuInfo->offs = 0;
 
+    cuInfo->ranges = NULL;
+    cuInfo->rangeCount = 0;
+
+    cuInfo->low = 0;
+    cuInfo->high = 0;
     int res = dwarf_lowhighpc( die,&cuInfo->low,&cuInfo->high );
     if( res==DW_DLV_OK && cuInfo->low &&
         (!lowestLow || cuInfo->low<lowestLow) )
@@ -504,7 +516,9 @@ int dwstOfFileExt(
         if( version<=4 )
         {
           int i;
-          Dwarf_Addr base = 0;
+          Dwarf_Addr base = cuInfo->low;
+          cuInfo->ranges = malloc( rangeCount*sizeof(range_t) );
+          if( !cuInfo->ranges ) rangeCount = 0;
           for( i=0; i<rangeCount; i++ )
           {
             Dwarf_Ranges *range = ranges + i;
@@ -533,6 +547,10 @@ int dwstOfFileExt(
             }
             if( high>cuInfo->high )
               cuInfo->high = high;
+
+            cuInfo->ranges[cuInfo->rangeCount].low = low;
+            cuInfo->ranges[cuInfo->rangeCount].high = high;
+            cuInfo->rangeCount++;
           }
 
           dwarf_dealloc_ranges( dbg,ranges,rangeCount );
@@ -540,6 +558,8 @@ int dwstOfFileExt(
         else
         {
           unsigned i;
+          cuInfo->ranges = malloc( rngEntriesCount*sizeof(range_t) );
+          if( !cuInfo->ranges ) rngEntriesCount = 0;
           for( i=0; i<rngEntriesCount; i++ )
           {
             unsigned entrylen = 0;
@@ -568,6 +588,10 @@ int dwstOfFileExt(
             }
             if( highpc>cuInfo->high )
               cuInfo->high = highpc;
+
+            cuInfo->ranges[cuInfo->rangeCount].low = lowpc;
+            cuInfo->ranges[cuInfo->rangeCount].high = highpc;
+            cuInfo->rangeCount++;
           }
 
           dwarf_dealloc_rnglists_head( rnghlhead );
@@ -592,7 +616,7 @@ int dwstOfFileExt(
       baseOffs = imageBase_dbg - imageBase;
   }
 
-  int i,j;
+  int i,j,k;
   for( i=0; i<count; i++ )
   {
     uint64_t ptrOrig = addr[i];
@@ -602,7 +626,13 @@ int dwstOfFileExt(
     for( j=0; j<cuQty; j++ )
     {
       cu_info *cuInfo = &cuArr[j];
-      if( ptr<cuInfo->low || ptr>=cuInfo->high ) continue;
+      if( cuInfo->high && (ptr<cuInfo->low || ptr>=cuInfo->high) )
+        continue;
+      for( k=0; k<cuInfo->rangeCount; ++k )
+        if( ptr>=cuInfo->ranges[k].low && ptr<cuInfo->ranges[k].high )
+          break;
+      if( k && k>=cuInfo->rangeCount )
+        continue;
 
       Dwarf_Die die;
       if( cuInfo->offs &&
@@ -720,6 +750,8 @@ int dwstOfFileExt(
 
       dwarf_dealloc( dbg,files,DW_DLA_LIST );
     }
+
+    free( cuArr[j].ranges );
   }
   free( cuArr );
 
