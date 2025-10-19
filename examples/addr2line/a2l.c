@@ -48,6 +48,8 @@ static void stdoutPrint(
       printf( "\n" );
       break;
   }
+
+  if( addr ) prevAddr = addr;
 }
 
 static void usage( const wchar_t *exe )
