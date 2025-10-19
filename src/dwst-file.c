@@ -501,7 +501,7 @@ int dwstOfFileExt(
       lowestLow = cuInfo->low;
     if( res!=DW_DLV_OK || !cuInfo->high )
     {
-      int hasLow = res==DW_DLV_OK;
+      int hasLow = res==DW_DLV_OK && cuInfo->low;
       if( !hasLow ) cuInfo->low = 0;
       cuInfo->high = 0;
 
@@ -578,7 +578,7 @@ int dwstOfFileExt(
               break;
             }
             if( code==DW_RLE_base_addressx || code==DW_RLE_base_address ||
-                debug_addr_unavailable )
+                debug_addr_unavailable || !lowpc )
               continue;
 
             if( !hasLow || lowpc<cuInfo->low )
