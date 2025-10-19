@@ -25,20 +25,26 @@
 #include <string.h>
 
 
-typedef void ChildWalker( Dwarf_Debug dbg,Dwarf_Die die,void *context );
+typedef int ChildWalker( Dwarf_Debug dbg,Dwarf_Die die,void *context );
 
 // call walkFunc() recursively for every child DIE
-static void walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
+static int walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
     ChildWalker *walkFunc,void *context )
 {
   Dwarf_Die child;
   if( dwarf_child(die,&child,NULL)!=DW_DLV_OK )
-    return;
+    return( 0 );
 
   while( 1 )
   {
-    walkChilds( dbg,child,walkFunc,context );
-    walkFunc( dbg,child,context );
+    int stopChilds = walkChilds( dbg,child,walkFunc,context );
+    int stopCur = walkFunc( dbg,child,context );
+
+    if( stopChilds || stopCur )
+    {
+      dwarf_dealloc( dbg,child,DW_DLA_DIE );
+      return( 1 );
+    }
 
     Dwarf_Die next_child;
     int res = dwarf_siblingof_b( dbg,child,1,&next_child,NULL );
@@ -48,6 +54,8 @@ static void walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
     if( res!=DW_DLV_OK ) break;
     child = next_child;
   }
+
+  return( 0 );
 }
 
 
@@ -262,19 +270,19 @@ typedef struct inline_info
 } inline_info;
 
 // find the calling-location of inlined functions
-static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
+static int findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 {
   Dwarf_Half tag;
   if( dwarf_tag(die,&tag,NULL)!=DW_DLV_OK ||
       (tag!=DW_TAG_inlined_subroutine &&
        tag!=DW_TAG_subprogram) )
-    return;
+    return( 0 );
 
   Dwarf_Addr low,high;
   if( dwarf_lowhighpc(die,&low,&high)==DW_DLV_OK && high )
   {
     if( cuInfo->ptr<low || cuInfo->ptr>=high )
-      return;
+      return( 0 );
   }
   else
   {
@@ -285,7 +293,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
     Dwarf_Unsigned rngEntriesCount;
     if( dwarf_ranges(dbg,die,&version,&ranges,&rangeCount,
           &rnghlhead,&rngEntriesCount)!=DW_DLV_OK )
-      return;
+      return( 0 );
 
     if( version<=4 )
     {
@@ -318,7 +326,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
       dwarf_dealloc_ranges( dbg,ranges,rangeCount );
 
-      if( i>=rangeCount ) return;
+      if( i>=rangeCount ) return( 0 );
     }
     else
     {
@@ -350,7 +358,7 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
       dwarf_dealloc_rnglists_head( rnghlhead );
 
-      if( i>=rngEntriesCount ) return;
+      if( i>=rngEntriesCount ) return( 0 );
     }
   }
 
@@ -364,18 +372,18 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
     if( funcname )
       dwarf_dealloc( dbg,funcname,DW_DLA_STRING );
-    return;
+    return( 1 );
   }
 
   Dwarf_Attribute callfile;
   if( dwarf_attr(die,DW_AT_call_file,&callfile,NULL)!=DW_DLV_OK )
-    return;
+    return( 1 );
 
   Dwarf_Attribute callline;
   if( dwarf_attr(die,DW_AT_call_line,&callline,NULL)!=DW_DLV_OK )
   {
     dwarf_dealloc( dbg,callfile,DW_DLA_ATTR );
-    return;
+    return( 1 );
   }
 
   Dwarf_Unsigned fileno,lineno;
@@ -411,6 +419,8 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
 
   dwarf_dealloc( dbg,callfile,DW_DLA_ATTR );
   dwarf_dealloc( dbg,callline,DW_DLA_ATTR );
+
+  return( 1 );
 }
 
 typedef struct range_t
