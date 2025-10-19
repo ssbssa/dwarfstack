@@ -327,13 +327,11 @@ static void findInlined( Dwarf_Debug dbg,Dwarf_Die die,inline_info *cuInfo )
       {
         unsigned entrylen = 0;
         unsigned code = 0;
-        Dwarf_Unsigned rawlowpc = 0;
-        Dwarf_Unsigned rawhighpc = 0;
         Dwarf_Unsigned lowpc = 0;
         Dwarf_Unsigned highpc = 0;
         Dwarf_Bool debug_addr_unavailable = 0;
         int res = dwarf_get_rnglists_entry_fields_a( rnghlhead,i,
-            &entrylen,&code,&rawlowpc,&rawhighpc,
+            &entrylen,&code,NULL,NULL,
             &debug_addr_unavailable,&lowpc,&highpc,NULL );
         if( res!=DW_DLV_OK || code==DW_RLE_end_of_list )
         {
