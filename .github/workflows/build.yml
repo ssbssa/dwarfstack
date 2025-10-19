@@ -62,6 +62,29 @@ jobs:
         env:
           PATH: ${{ steps.gcc64.outputs.location }}\bin;${{ steps.gcc32.outputs.location }}\bin;${{ steps.llvm-mingw.outputs.location }}\bin
 
+      - name: upload unsigned artifact
+        id: upload-unsigned-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwarfstack-unsigned
+          if-no-files-found: error
+          path: |
+            dwarfstack32.dll
+            dwarfstack64.dll
+            dwarfstack64a.dll
+      - name: sign
+        uses: signpath/github-action-submit-signing-request@v1
+        env:
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ (startsWith(github.ref, 'refs/tags/')) && 'release-signing' || 'test-signing' }}
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: 'dwarfstack'
+          signing-policy-slug: '${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: "${{ steps.upload-unsigned-artifact.outputs.artifact-id }}"
+          wait-for-completion: true
+          output-artifact-directory: '.'
+
       - name: copy dlls back to build dirs
         run: |
           cp dwarfstack32.dll build32/bin/dwarfstack.dll
@@ -84,7 +107,7 @@ jobs:
             dwarfstack-*.7z
             dwarfstack-*.tar.xz
 
-      - name: upload artifact
+      - name: upload signed artifact
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:

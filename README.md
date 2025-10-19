@@ -30,3 +30,8 @@ using -fno-omit-frame-pointer (and maybe even
 -fno-optimize-sibling-calls / -fno-schedule-insns2).
 Otherwise, depending on the situation (like gcc version), some frames
 might be missing.
+
+
+code signing:
+-------------
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
