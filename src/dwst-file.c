@@ -462,7 +462,6 @@ int dwstOfFileExt(
 
   cu_info *cuArr = NULL;
   int cuQty = 0;
-  Dwarf_Addr lowestLow = 0;
   while( 1 )
   {
     Dwarf_Unsigned next_cu_header;
@@ -496,9 +495,6 @@ int dwstOfFileExt(
     cuInfo->low = 0;
     cuInfo->high = 0;
     int res = dwarf_lowhighpc( die,&cuInfo->low,&cuInfo->high );
-    if( res==DW_DLV_OK && cuInfo->low &&
-        (!lowestLow || cuInfo->low<lowestLow) )
-      lowestLow = cuInfo->low;
     if( res!=DW_DLV_OK || !cuInfo->high )
     {
       int hasLow = res==DW_DLV_OK && cuInfo->low;
