@@ -1,6 +1,8 @@
 dwarfstack
 ==========
 
+[![build](https://github.com/ssbssa/dwarfstack/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/ssbssa/dwarfstack/actions/workflows/build.yml?query=branch%3Amaster)
+
 dwarfstack aims to provide a simple way to get meaningful stacktraces.
 
 Only windows executables (mingw-gcc) are supported.

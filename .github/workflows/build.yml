@@ -1,0 +1,96 @@
+name: build
+on: [push, pull_request]
+
+env:
+  GCC_VERSION: 14.3
+  GCC_PKGVERSION: ssbssa-1
+  LLVM_MINGW_VERSION: 20250613
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: configure git line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: checkout sources
+        uses: actions/checkout@v4
+
+      - name: get i686 gcc
+        id: gcc32
+        run: |
+          curl -LO https://github.com/ssbssa/gcc/releases/download/gcc-${{ env.GCC_VERSION }}-${{ env.GCC_PKGVERSION }}/gcc-${{ env.GCC_VERSION }}.0-${{ env.GCC_PKGVERSION }}-i686.7z
+          7z x -ogcc32 gcc-${{ env.GCC_VERSION }}.0-${{ env.GCC_PKGVERSION }}-i686.7z
+          echo "location=${{ github.workspace }}\gcc32" >> $env:GITHUB_OUTPUT
+      - name: get x86_64 gcc
+        id: gcc64
+        run: |
+          curl -LO https://github.com/ssbssa/gcc/releases/download/gcc-${{ env.GCC_VERSION }}-${{ env.GCC_PKGVERSION }}/gcc-${{ env.GCC_VERSION }}.0-${{ env.GCC_PKGVERSION }}-x86_64.7z
+          7z x -ogcc64 gcc-${{ env.GCC_VERSION }}.0-${{ env.GCC_PKGVERSION }}-x86_64.7z
+          echo "location=${{ github.workspace }}\gcc64" >> $env:GITHUB_OUTPUT
+      - name: get llvm-mingw for aarch64 build
+        id: llvm-mingw
+        run: |
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/${{ env.LLVM_MINGW_VERSION }}/llvm-mingw-${{ env.LLVM_MINGW_VERSION }}-msvcrt-x86_64.zip
+          7z x llvm-mingw-${{ env.LLVM_MINGW_VERSION }}-msvcrt-x86_64.zip
+          echo "location=${{ github.workspace }}\llvm-mingw-${{ env.LLVM_MINGW_VERSION }}-msvcrt-x86_64" >> $env:GITHUB_OUTPUT
+
+      - name: build debug dlls
+        run: |
+          make OPT="-O3 -g3" LDFLAGS= dwarfstack32.dll dwarfstack64.dll dwarfstack64a.dll
+          7z a -mx=9 dwarfstack-${{ github.ref_name }}-dlls-dbg.7z dwarfstack32.dll dwarfstack64.dll dwarfstack64a.dll
+        env:
+          PATH: ${{ steps.gcc64.outputs.location }}\bin;${{ steps.gcc32.outputs.location }}\bin;${{ steps.llvm-mingw.outputs.location }}\bin;c:\mingw64\bin;c:\msys64\usr\bin;C:\ProgramData\Chocolatey\bin
+
+      - name: upload debug artifact
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwarfstack-debug
+          if-no-files-found: error
+          path: |
+            dwarfstack32.dll
+            dwarfstack64.dll
+            dwarfstack64a.dll
+
+      - name: strip dlls
+        run: |
+          i686-w64-mingw32-strip -s dwarfstack32.dll
+          x86_64-w64-mingw32-strip -s dwarfstack64.dll
+          aarch64-w64-mingw32-strip -s dwarfstack64a.dll
+        env:
+          PATH: ${{ steps.gcc64.outputs.location }}\bin;${{ steps.gcc32.outputs.location }}\bin;${{ steps.llvm-mingw.outputs.location }}\bin
+
+      - name: copy dlls back to build dirs
+        run: |
+          cp dwarfstack32.dll build32/bin/dwarfstack.dll
+          cp dwarfstack64.dll build64/bin/dwarfstack.dll
+          cp dwarfstack64a.dll build64a/bin/dwarfstack.dll
+
+      - name: build packages
+        run: make OPT="-O3 -g3" packages
+        env:
+          PATH: ${{ steps.gcc64.outputs.location }}\bin;${{ steps.gcc32.outputs.location }}\bin;${{ steps.llvm-mingw.outputs.location }}\bin;c:\mingw64\bin;c:\msys64\usr\bin;C:\ProgramData\Chocolatey\bin;C:\Program Files\Git\bin
+
+      - name: release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          name: dwarfstack ${{ github.ref_name }}
+          files: |
+            dwarfstack-*.7z
+            dwarfstack-*.tar.xz
+
+      - name: upload artifact
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwarfstack
+          if-no-files-found: error
+          path: |
+            dwarfstack32.dll
+            dwarfstack64.dll
+            dwarfstack64a.dll
