@@ -38,7 +38,7 @@ jobs:
 
       - name: build debug dlls
         run: |
-          make OPT="-O3 -g3" LDFLAGS= dwarfstack32.dll dwarfstack64.dll dwarfstack64a.dll
+          make OPT="-O3 -g3" LDFLAGS=-static dwarfstack32.dll dwarfstack64.dll dwarfstack64a.dll
           7z a -mx=9 dwarfstack-${{ github.ref_name }}-dlls-dbg.7z dwarfstack32.dll dwarfstack64.dll dwarfstack64a.dll
         env:
           PATH: ${{ steps.gcc64.outputs.location }}\bin;${{ steps.gcc32.outputs.location }}\bin;${{ steps.llvm-mingw.outputs.location }}\bin;c:\mingw64\bin;c:\msys64\usr\bin;C:\ProgramData\Chocolatey\bin
