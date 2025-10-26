@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 4.1.1)
 
 project(dwarfstack VERSION 2.3.0 LANGUAGES C CXX)
 
-set(DWST_VERSION "2.3-git")
-set(DWST_VER_NUM 2,3,0,99)
-set(DWST_PRERELEASE 1)
+set(DWST_VERSION "2.3")
+set(DWST_VER_NUM 2,3,0,0)
+set(DWST_PRERELEASE 0)
 set(DWST_COPYRIGHT_YEARS "2013-2025")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
