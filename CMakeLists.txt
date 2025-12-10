@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.1.1)
+cmake_minimum_required(VERSION 3.28)
 
 project(dwarfstack VERSION 2.4.0 LANGUAGES C CXX)
 
@@ -7,13 +7,7 @@ set(DWST_VER_NUM 2,4,0,99)
 set(DWST_PRERELEASE 1)
 set(DWST_COPYRIGHT_YEARS "2013-2025")
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TARGET_NAME dwarfstack64)
-else()
-    set(TARGET_NAME dwarfstack32)
-endif()
-
-add_library(${TARGET_NAME} SHARED
+add_library(dwarfstack
     src/dwst-exception-dialog.c
     src/dwst-exception.c
     src/dwst-file.c
@@ -70,32 +64,37 @@ set_source_files_properties(dwarfstack-ver.rc PROPERTIES
     COMPILE_DEFINITIONS "DWST_VER_STR=\\\"${DWST_VERSION}\\\";DWST_VER_NUM=${DWST_VER_NUM};DWST_PRERELEASE=${DWST_PRERELEASE};DWST_COPYRIGHT_YEARS=\\\"${DWST_COPYRIGHT_YEARS}\\\""
 )
 
-target_compile_options(${TARGET_NAME} PRIVATE
+target_compile_options(dwarfstack PRIVATE
     -Wno-unused
     -Wno-pointer-to-int-cast
     -Wno-int-to-pointer-cast
 )
 
-target_compile_definitions(${TARGET_NAME} PRIVATE
-    DWST_SHARED
+target_compile_definitions(dwarfstack PRIVATE
     DW_TSHASHTYPE=uintptr_t
     LIBDWARF_STATIC
 )
 
-target_link_libraries(${TARGET_NAME} PRIVATE
+if (BUILD_SHARED_LIBS)
+    target_compile_definitions(dwarfstack PRIVATE DWST_SHARED)
+else()
+    target_compile_definitions(dwarfstack PUBLIC DWST_STATIC)
+endif()
+
+target_link_libraries(dwarfstack PRIVATE
     dbghelp
     gdi32
     stdc++
 )
 
-target_include_directories(${TARGET_NAME} PRIVATE
+target_include_directories(dwarfstack PRIVATE
     mgwhelp
-    libdwarf
     zlib
     PUBLIC
     include
+    libdwarf
 )
 
 add_executable(a2l examples/addr2line/a2l.c)
-target_link_libraries(a2l PRIVATE ${TARGET_NAME})
+target_link_libraries(a2l PRIVATE dwarfstack)
 target_link_options(a2l PRIVATE -municode)
