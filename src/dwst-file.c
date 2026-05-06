@@ -28,7 +28,7 @@
 typedef int ChildWalker( Dwarf_Debug dbg,Dwarf_Die die,void *context );
 
 // call walkFunc() recursively for every child DIE
-static int walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
+static int walkChildren( Dwarf_Debug dbg,Dwarf_Die die,
     ChildWalker *walkFunc,void *context )
 {
   Dwarf_Die child;
@@ -37,10 +37,10 @@ static int walkChilds( Dwarf_Debug dbg,Dwarf_Die die,
 
   while( 1 )
   {
-    int stopChilds = walkChilds( dbg,child,walkFunc,context );
+    int stopChildren = walkChildren( dbg,child,walkFunc,context );
     int stopCur = walkFunc( dbg,child,context );
 
-    if( stopChilds || stopCur )
+    if( stopChildren || stopCur )
     {
       dwarf_dealloc( dbg,child,DW_DLA_DIE );
       return( 1 );
@@ -721,7 +721,7 @@ int dwstOfFileExt(
               files,fileCount,callbackFunc,callbackFuncW,callbackContext,
               ptrOrig,(int)srcfileno+cuInfo->fileno_offs,lineno,columnno,
               cuInfo->fileno_offs };
-            walkChilds( dbg,die,(ChildWalker*)findInlined,&ii );
+            walkChildren( dbg,die,(ChildWalker*)findInlined,&ii );
           }
           else
             dwarf_callback( callbackFunc,callbackFuncW,ptrOrig,name,nameW,
