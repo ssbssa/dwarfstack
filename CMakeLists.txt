@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.28)
 
 project(dwarfstack VERSION 2.4.0 LANGUAGES C CXX)
 
+option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+
 set(DWST_VERSION "2.4-git")
 set(DWST_VER_NUM 2,4,0,99)
 set(DWST_PRERELEASE 1)
