@@ -73,6 +73,7 @@ jobs:
             dwarfstack64.dll
             dwarfstack64a.dll
       - name: sign
+        if: ${{ github.event_name != 'pull_request' }}
         uses: signpath/github-action-submit-signing-request@v1
         env:
           SIGNPATH_SIGNING_POLICY_SLUG: ${{ (startsWith(github.ref, 'refs/tags/')) && 'release-signing' || 'test-signing' }}
@@ -86,6 +87,7 @@ jobs:
           output-artifact-directory: '.'
 
       - name: copy dlls back to build dirs
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           cp dwarfstack32.dll build32/bin/dwarfstack.dll
           cp dwarfstack64.dll build64/bin/dwarfstack.dll
@@ -108,7 +110,7 @@ jobs:
             dwarfstack-*.tar.xz
 
       - name: upload signed artifact
-        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') && github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: dwarfstack
