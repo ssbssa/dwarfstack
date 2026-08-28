@@ -544,14 +544,6 @@ int dwstOfFileExt(
 
             if( !low ) continue;
 
-            if( !hasLow || low<cuInfo->low )
-            {
-              cuInfo->low = low;
-              hasLow = 1;
-            }
-            if( high>cuInfo->high )
-              cuInfo->high = high;
-
             cuInfo->ranges[cuInfo->rangeCount].low = low;
             cuInfo->ranges[cuInfo->rangeCount].high = high;
             cuInfo->rangeCount++;
@@ -584,14 +576,6 @@ int dwstOfFileExt(
             if( code==DW_RLE_base_addressx || code==DW_RLE_base_address ||
                 debug_addr_unavailable || !lowpc )
               continue;
-
-            if( !hasLow || lowpc<cuInfo->low )
-            {
-              cuInfo->low = lowpc;
-              hasLow = 1;
-            }
-            if( highpc>cuInfo->high )
-              cuInfo->high = highpc;
 
             cuInfo->ranges[cuInfo->rangeCount].low = lowpc;
             cuInfo->ranges[cuInfo->rangeCount].high = highpc;
